@@ -13,7 +13,7 @@ class SpotlightViewController: NSViewController {
 
         // Create text field
         textField = NSTextField(frame: NSRect(x: 20, y: 15, width: 560, height: 30))
-        textField.placeholderString = "Type something..."
+        textField.placeholderString = "What task are you holding?"
         textField.font = NSFont.systemFont(ofSize: 18)
         textField.isBordered = false
         textField.focusRingType = .none

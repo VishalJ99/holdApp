@@ -14,10 +14,10 @@ class HotkeyManager {
     }
 
     func registerHotkeys() {
-        // Register Command+Space to show
+        // Register Command+Shift+Space to show
         registerHotkey(
             keyCode: UInt32(kVK_Space),
-            modifiers: UInt32(cmdKey),
+            modifiers: UInt32(cmdKey | shiftKey),
             hotkeyId: 1,
             hotkeyRef: &showHotKeyRef
         )
