@@ -27,6 +27,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Setup callbacks
         spotlightViewController.onEnterPressed = { [weak self] text in
+            // Save to CloudKit
+            CloudKitManager.shared.saveTask(text: text) { result in
+                switch result {
+                case .success:
+                    print("✅ Task saved: \(text)")
+                case .failure(let error):
+                    print("❌ Error saving task: \(error)")
+                }
+            }
+
+            // Also keep logging to file for backup
             self?.logManager.log(text: text)
             self?.spotlightPanel.hide()
         }

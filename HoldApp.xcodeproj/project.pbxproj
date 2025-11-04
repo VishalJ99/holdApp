@@ -7,6 +7,20 @@
 	objects = {
 
 /* Begin PBXContainerItemProxy section */
+		22A536082EB97CB7000F7BFD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 22ABCE0C2EB927DE00A43380 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 22A535FA2EB97CB5000F7BFD;
+			remoteInfo = "HoldApp-iOS";
+		};
+		22A536122EB97CB7000F7BFD /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 22ABCE0C2EB927DE00A43380 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 22A535FA2EB97CB5000F7BFD;
+			remoteInfo = "HoldApp-iOS";
+		};
 		22ABCE262EB927E000A43380 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 22ABCE0C2EB927DE00A43380 /* Project object */;
@@ -24,14 +38,45 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		22A535FB2EB97CB5000F7BFD /* HoldApp-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "HoldApp-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		22A536072EB97CB7000F7BFD /* HoldApp-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "HoldApp-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		22A536112EB97CB7000F7BFD /* HoldApp-iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "HoldApp-iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		22ABCE142EB927DE00A43380 /* HoldApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HoldApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		22ABCE252EB927E000A43380 /* HoldAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoldAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		22ABCE2F2EB927E000A43380 /* HoldAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoldAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		22A536242EBA6D2B000F7BFD /* Exceptions for "HoldApp" folder in "HoldApp-iOS" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				CloudKitManager.swift,
+			);
+			target = 22A535FA2EB97CB5000F7BFD /* HoldApp-iOS */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		22A535FC2EB97CB5000F7BFD /* HoldApp-iOS */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "HoldApp-iOS";
+			sourceTree = "<group>";
+		};
+		22A5360A2EB97CB7000F7BFD /* HoldApp-iOSTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "HoldApp-iOSTests";
+			sourceTree = "<group>";
+		};
+		22A536142EB97CB7000F7BFD /* HoldApp-iOSUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = "HoldApp-iOSUITests";
+			sourceTree = "<group>";
+		};
 		22ABCE162EB927DE00A43380 /* HoldApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				22A536242EBA6D2B000F7BFD /* Exceptions for "HoldApp" folder in "HoldApp-iOS" target */,
+			);
 			path = HoldApp;
 			sourceTree = "<group>";
 		};
@@ -48,6 +93,27 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		22A535F82EB97CB5000F7BFD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		22A536042EB97CB7000F7BFD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		22A5360E2EB97CB7000F7BFD /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		22ABCE112EB927DE00A43380 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -78,6 +144,9 @@
 				22ABCE162EB927DE00A43380 /* HoldApp */,
 				22ABCE282EB927E000A43380 /* HoldAppTests */,
 				22ABCE322EB927E000A43380 /* HoldAppUITests */,
+				22A535FC2EB97CB5000F7BFD /* HoldApp-iOS */,
+				22A5360A2EB97CB7000F7BFD /* HoldApp-iOSTests */,
+				22A536142EB97CB7000F7BFD /* HoldApp-iOSUITests */,
 				22ABCE152EB927DE00A43380 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -88,6 +157,9 @@
 				22ABCE142EB927DE00A43380 /* HoldApp.app */,
 				22ABCE252EB927E000A43380 /* HoldAppTests.xctest */,
 				22ABCE2F2EB927E000A43380 /* HoldAppUITests.xctest */,
+				22A535FB2EB97CB5000F7BFD /* HoldApp-iOS.app */,
+				22A536072EB97CB7000F7BFD /* HoldApp-iOSTests.xctest */,
+				22A536112EB97CB7000F7BFD /* HoldApp-iOSUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -95,6 +167,74 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		22A535FA2EB97CB5000F7BFD /* HoldApp-iOS */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 22A536192EB97CB7000F7BFD /* Build configuration list for PBXNativeTarget "HoldApp-iOS" */;
+			buildPhases = (
+				22A535F72EB97CB5000F7BFD /* Sources */,
+				22A535F82EB97CB5000F7BFD /* Frameworks */,
+				22A535F92EB97CB5000F7BFD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				22A535FC2EB97CB5000F7BFD /* HoldApp-iOS */,
+			);
+			name = "HoldApp-iOS";
+			packageProductDependencies = (
+			);
+			productName = "HoldApp-iOS";
+			productReference = 22A535FB2EB97CB5000F7BFD /* HoldApp-iOS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		22A536062EB97CB7000F7BFD /* HoldApp-iOSTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 22A5361C2EB97CB7000F7BFD /* Build configuration list for PBXNativeTarget "HoldApp-iOSTests" */;
+			buildPhases = (
+				22A536032EB97CB7000F7BFD /* Sources */,
+				22A536042EB97CB7000F7BFD /* Frameworks */,
+				22A536052EB97CB7000F7BFD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				22A536092EB97CB7000F7BFD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				22A5360A2EB97CB7000F7BFD /* HoldApp-iOSTests */,
+			);
+			name = "HoldApp-iOSTests";
+			packageProductDependencies = (
+			);
+			productName = "HoldApp-iOSTests";
+			productReference = 22A536072EB97CB7000F7BFD /* HoldApp-iOSTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		22A536102EB97CB7000F7BFD /* HoldApp-iOSUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 22A5361F2EB97CB7000F7BFD /* Build configuration list for PBXNativeTarget "HoldApp-iOSUITests" */;
+			buildPhases = (
+				22A5360D2EB97CB7000F7BFD /* Sources */,
+				22A5360E2EB97CB7000F7BFD /* Frameworks */,
+				22A5360F2EB97CB7000F7BFD /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				22A536132EB97CB7000F7BFD /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				22A536142EB97CB7000F7BFD /* HoldApp-iOSUITests */,
+			);
+			name = "HoldApp-iOSUITests";
+			packageProductDependencies = (
+			);
+			productName = "HoldApp-iOSUITests";
+			productReference = 22A536112EB97CB7000F7BFD /* HoldApp-iOSUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 		22ABCE132EB927DE00A43380 /* HoldApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 22ABCE392EB927E000A43380 /* Build configuration list for PBXNativeTarget "HoldApp" */;
@@ -173,6 +313,17 @@
 				LastSwiftUpdateCheck = 1640;
 				LastUpgradeCheck = 1640;
 				TargetAttributes = {
+					22A535FA2EB97CB5000F7BFD = {
+						CreatedOnToolsVersion = 16.4;
+					};
+					22A536062EB97CB7000F7BFD = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 22A535FA2EB97CB5000F7BFD;
+					};
+					22A536102EB97CB7000F7BFD = {
+						CreatedOnToolsVersion = 16.4;
+						TestTargetID = 22A535FA2EB97CB5000F7BFD;
+					};
 					22ABCE132EB927DE00A43380 = {
 						CreatedOnToolsVersion = 16.4;
 					};
@@ -203,11 +354,35 @@
 				22ABCE132EB927DE00A43380 /* HoldApp */,
 				22ABCE242EB927E000A43380 /* HoldAppTests */,
 				22ABCE2E2EB927E000A43380 /* HoldAppUITests */,
+				22A535FA2EB97CB5000F7BFD /* HoldApp-iOS */,
+				22A536062EB97CB7000F7BFD /* HoldApp-iOSTests */,
+				22A536102EB97CB7000F7BFD /* HoldApp-iOSUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		22A535F92EB97CB5000F7BFD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		22A536052EB97CB7000F7BFD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		22A5360F2EB97CB7000F7BFD /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		22ABCE122EB927DE00A43380 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -232,6 +407,27 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		22A535F72EB97CB5000F7BFD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		22A536032EB97CB7000F7BFD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		22A5360D2EB97CB7000F7BFD /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		22ABCE102EB927DE00A43380 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -256,6 +452,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		22A536092EB97CB7000F7BFD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 22A535FA2EB97CB5000F7BFD /* HoldApp-iOS */;
+			targetProxy = 22A536082EB97CB7000F7BFD /* PBXContainerItemProxy */;
+		};
+		22A536132EB97CB7000F7BFD /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 22A535FA2EB97CB5000F7BFD /* HoldApp-iOS */;
+			targetProxy = 22A536122EB97CB7000F7BFD /* PBXContainerItemProxy */;
+		};
 		22ABCE272EB927E000A43380 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 22ABCE132EB927DE00A43380 /* HoldApp */;
@@ -269,6 +475,149 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		22A5361A2EB97CB7000F7BFD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "HoldApp-iOS/HoldApp-iOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L5YX8CH3F5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vishaljain.HoldApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		22A5361B2EB97CB7000F7BFD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = "HoldApp-iOS/HoldApp-iOS.entitlements";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L5YX8CH3F5;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.vishaljain.HoldApp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		22A5361D2EB97CB7000F7BFD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L5YX8CH3F5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vishaljain.HoldApp-iOSTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoldApp-iOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoldApp-iOS";
+			};
+			name = Debug;
+		};
+		22A5361E2EB97CB7000F7BFD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L5YX8CH3F5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vishaljain.HoldApp-iOSTests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/HoldApp-iOS.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/HoldApp-iOS";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		22A536202EB97CB7000F7BFD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L5YX8CH3F5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vishaljain.HoldApp-iOSUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "HoldApp-iOS";
+			};
+			name = Debug;
+		};
+		22A536212EB97CB7000F7BFD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = L5YX8CH3F5;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.5;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.vishaljain.HoldApp-iOSUITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "HoldApp-iOS";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
 		22ABCE372EB927E000A43380 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -516,6 +865,33 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		22A536192EB97CB7000F7BFD /* Build configuration list for PBXNativeTarget "HoldApp-iOS" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				22A5361A2EB97CB7000F7BFD /* Debug */,
+				22A5361B2EB97CB7000F7BFD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		22A5361C2EB97CB7000F7BFD /* Build configuration list for PBXNativeTarget "HoldApp-iOSTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				22A5361D2EB97CB7000F7BFD /* Debug */,
+				22A5361E2EB97CB7000F7BFD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		22A5361F2EB97CB7000F7BFD /* Build configuration list for PBXNativeTarget "HoldApp-iOSUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				22A536202EB97CB7000F7BFD /* Debug */,
+				22A536212EB97CB7000F7BFD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		22ABCE0F2EB927DE00A43380 /* Build configuration list for PBXProject "HoldApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
