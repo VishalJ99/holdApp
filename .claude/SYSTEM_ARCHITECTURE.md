@@ -485,34 +485,6 @@ Result: Users never see each other's data (automatic isolation by iCloud account
 
 ---
 
-## Testing Checklist
-
-### Mac App:
-- [ ] Global hotkey triggers (Cmd+Shift+Space)
-- [ ] Capture bar appears centered
-- [ ] Text input works
-- [ ] Enter saves task (check logs: "✅ Task saved")
-- [ ] CloudKit save succeeds (check logs: record ID)
-- [ ] Escape closes capture bar
-
-### iPhone App:
-- [ ] First launch shows permission dialog
-- [ ] User grants notification permission
-- [ ] APNs registration succeeds (check logs: device token)
-- [ ] Subscription created successfully (check logs: subscription ID)
-- [ ] App fetches existing tasks on launch
-- [ ] Push notification arrives when Mac saves task
-- [ ] Display updates within 1 second of Mac capture
-
-### Integration:
-- [ ] Mac and iPhone signed into same iCloud account
-- [ ] Mac saves task → iPhone receives push notification
-- [ ] iPhone displays latest task correctly
-- [ ] Multiple Mac captures update iPhone each time
-- [ ] Different iCloud accounts = no cross-user data visible
-
----
-
 ## File Structure Summary
 
 ```
