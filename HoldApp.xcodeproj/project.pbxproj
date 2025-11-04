@@ -38,10 +38,10 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		22A535FB2EB97CB5000F7BFD /* HoldApp-iOS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "HoldApp-iOS.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		22A535FB2EB97CB5000F7BFD /* Hold.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hold.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		22A536072EB97CB7000F7BFD /* HoldApp-iOSTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "HoldApp-iOSTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 		22A536112EB97CB7000F7BFD /* HoldApp-iOSUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "HoldApp-iOSUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
-		22ABCE142EB927DE00A43380 /* HoldApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = HoldApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		22ABCE142EB927DE00A43380 /* Hold.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Hold.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		22ABCE252EB927E000A43380 /* HoldAppTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoldAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		22ABCE2F2EB927E000A43380 /* HoldAppUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = HoldAppUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -154,10 +154,10 @@
 		22ABCE152EB927DE00A43380 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				22ABCE142EB927DE00A43380 /* HoldApp.app */,
+				22ABCE142EB927DE00A43380 /* Hold.app */,
 				22ABCE252EB927E000A43380 /* HoldAppTests.xctest */,
 				22ABCE2F2EB927E000A43380 /* HoldAppUITests.xctest */,
-				22A535FB2EB97CB5000F7BFD /* HoldApp-iOS.app */,
+				22A535FB2EB97CB5000F7BFD /* Hold.app */,
 				22A536072EB97CB7000F7BFD /* HoldApp-iOSTests.xctest */,
 				22A536112EB97CB7000F7BFD /* HoldApp-iOSUITests.xctest */,
 			);
@@ -186,7 +186,7 @@
 			packageProductDependencies = (
 			);
 			productName = "HoldApp-iOS";
-			productReference = 22A535FB2EB97CB5000F7BFD /* HoldApp-iOS.app */;
+			productReference = 22A535FB2EB97CB5000F7BFD /* Hold.app */;
 			productType = "com.apple.product-type.application";
 		};
 		22A536062EB97CB7000F7BFD /* HoldApp-iOSTests */ = {
@@ -254,7 +254,7 @@
 			packageProductDependencies = (
 			);
 			productName = HoldApp;
-			productReference = 22ABCE142EB927DE00A43380 /* HoldApp.app */;
+			productReference = 22ABCE142EB927DE00A43380 /* Hold.app */;
 			productType = "com.apple.product-type.application";
 		};
 		22ABCE242EB927E000A43380 /* HoldAppTests */ = {
@@ -498,7 +498,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishaljain.HoldApp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Hold;
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -529,7 +529,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishaljain.HoldApp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Hold;
 				SDKROOT = iphoneos;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -759,7 +759,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishaljain.HoldApp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Hold;
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -787,7 +787,7 @@
 				);
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.vishaljain.HoldApp;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_NAME = Hold;
 				REGISTER_APP_GROUPS = YES;
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
