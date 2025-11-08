@@ -6,16 +6,38 @@
 //
 
 import SwiftUI
+import SwiftData
 import UserNotifications
 
 @main
 struct HoldApp_iOSApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
+    // SwiftData container with CloudKit sync
+    var modelContainer: ModelContainer = {
+        do {
+            let schema = Schema([Task.self])
+            let modelConfiguration = ModelConfiguration(
+                schema: schema,
+                isStoredInMemoryOnly: false,
+                cloudKitDatabase: .private("iCloud.com.vishaljain.HoldApp")
+            )
+            let container = try ModelContainer(
+                for: schema,
+                configurations: [modelConfiguration]
+            )
+            print("✅ [iOS] SwiftData + CloudKit initialized (private database)")
+            return container
+        } catch {
+            fatalError("Failed to initialize SwiftData: \(error)")
+        }
+    }()
+
     var body: some Scene {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(modelContainer)
     }
 }
 

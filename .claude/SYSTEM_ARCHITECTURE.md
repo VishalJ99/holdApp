@@ -1,34 +1,226 @@
 # Hold - System Architecture
 
+**Version:** 1.1 (Phase 0 Implementation)
+**Last Updated:** 2025-11-08
+**Implementation Status:** Phase 0 - Foundation Complete
+
+---
+
+## Implementation Progress
+
+### ✅ Phase 0: Foundation (COMPLETED)
+- SwiftData model layer with Task entity
+- CloudKit sync via NSPersistentCloudKitContainer (private database)
+- AppState observable for app-wide state management
+- TaskManager for all task operations
+- Debug menu for verification
+- Toast notification system
+- Foundation files created and integrated
+
+### 🔄 Next Phase: Phase 1 - Spotlight State Machine
+- Modifier key detection for hierarchical task creation
+- Parent/child/sibling relationships
+- Up/Down arrow handling
+
+---
+
 ## High-Level Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                            USER FLOW                                │
+│                            USER FLOW (Phase 0)                      │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  Mac (Input)                CloudKit (Sync)         iPhone (Output)│
-│  ┌──────────┐              ┌──────────┐             ┌──────────┐  │
-│  │ Cmd+     │              │ Database │             │          │  │
-│  │ Shift+   │──Save Task──>│  Task    │──Push──────>│ Display  │  │
-│  │ Space    │              │ Records  │ Notification│ Current  │  │
-│  │          │              │          │             │ Task     │  │
-│  │ Type &   │              │Subscription│            │          │  │
-│  │ Enter    │              │ Triggers  │            │ Center   │  │
-│  └──────────┘              └──────────┘             │ Aligned  │  │
-│                                                      └──────────┘  │
+│  Mac (Input)                SwiftData + CloudKit     iPhone (Output)│
+│  ┌──────────┐              ┌──────────────────┐     ┌──────────┐  │
+│  │ Cmd+     │              │  SwiftData       │     │          │  │
+│  │ Shift+   │──Create──────>│  Task Model     │────>│ Display  │  │
+│  │ Space    │   Task       │  (Local + Sync)  │Auto │ Current  │  │
+│  │          │              │                  │Sync │ Task     │  │
+│  │ Type &   │              │  Private DB      │     │          │  │
+│  │ Enter    │              │  (isCurrent=true)│     │ @Query   │  │
+│  └──────────┘              └──────────────────┘     └──────────┘  │
+│                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Core Flow:
+### Core Flow (Phase 0):
 1. **Capture** (Mac): User presses Cmd+Shift+Space → Types task → Hits Enter
-2. **Save** (Mac): Task saved to CloudKit public database as a CKRecord
-3. **Detect** (CloudKit): Subscription detects new Task record creation
-4. **Notify** (CloudKit → APNs): Silent push notification sent to subscribed iPhone
-5. **Fetch** (iPhone): App receives notification → Fetches latest task
-6. **Display** (iPhone): UI updates to show new task (< 1 second end-to-end)
+2. **Save** (Mac): TaskManager.createTask() → SwiftData insert → Automatic CloudKit sync
+3. **Sync** (SwiftData): Changes replicated to CloudKit private database (CD_Task records)
+4. **Detect** (CloudKit): SwiftData sync framework handles push notifications automatically
+5. **Update** (iPhone): @Query(filter: isCurrent == true) auto-updates when sync arrives
+6. **Display** (iPhone): SwiftUI reactive binding shows current task (2-5s sync lag)
+
+**Key Difference from MVP:**
+- **MVP:** Pure CloudKit with manual save/fetch/subscribe
+- **Phase 0:** SwiftData + CloudKit with automatic sync, local persistence, and reactive queries
 
 ---
+
+## Phase 0: New Architecture Components
+
+### Data Layer (Shared - Both Targets)
+
+**`Models/Task.swift`**
+- **Target Membership**: ✅ HoldApp (Mac) + ✅ HoldApp-iOS (iPhone)
+- **Responsibility**: SwiftData model for task entities
+- **Key Features**:
+  - Hierarchical relationships (parent/children with cascade delete)
+  - State tracking (isCurrent, isCompleted, isDismissed)
+  - Sorting via sortOrder field
+  - Computed properties for nextSibling, previousSibling, isActive
+- **Fields**:
+  ```swift
+  @Attribute(.unique) var id: UUID
+  var text: String
+  var createdAt: Date
+  var timestamp: Date // Legacy compatibility
+  var parent: Task?
+  @Relationship(deleteRule: .cascade, inverse: \Task.parent) var children: [Task]
+  var sortOrder: Int
+  var isCurrent: Bool
+  var isCompleted: Bool
+  var completedAt: Date?
+  var dismissedAt: Date?
+  ```
+
+### State Management Layer (Mac Only)
+
+**`State/AppState.swift`** (`HoldApp/State/AppState.swift`)
+- **Responsibility**: Observable app-wide state
+- **Key Properties**:
+  - `currentTaskId: UUID?` - Current task pointer
+  - `isSpotlightOpen: Bool` - Spotlight panel state
+  - `isEditorOpen: Bool` - Editor window state (Phase 4)
+  - `filterText: String` - Editor filter persistence (Phase 4)
+  - `editorMode: EditorMode` - 3-state filter system (Phase 4)
+
+**`Managers/TaskManager.swift`** (`HoldApp/Managers/TaskManager.swift`)
+- **Responsibility**: All task operations and business logic
+- **Key Methods**:
+  - `createTask(text:parent:setCurrent:) -> Task` - Creates task with SwiftData
+  - `setCurrentTask(_ task: Task)` - Updates current pointer + syncs
+  - `completeTask(_ task: Task)` - Marks complete + advances (Phase 2)
+  - `dismissTask(_ task: Task)` - Marks dismissed + advances (Phase 2)
+  - `advanceToNextTask() -> Task?` - 5-step advancement algorithm (Phase 2)
+  - `fetchTask(id:)`, `fetchActiveTasks()`, `searchTasks(query:)` - Queries
+- **Dependencies**: ModelContext (SwiftData), AppState
+- **Logging**: Console output for all operations with ✅/❌ indicators
+
+### Debug & Utility Layer (Mac Only)
+
+**`Managers/DebugMenuManager.swift`** (`HoldApp/Managers/DebugMenuManager.swift`)
+- **Responsibility**: Debug menu in menu bar for verification
+- **Menu Items**:
+  - Print Task Tree → Hierarchical console output with ★ for current
+  - Print Current Task → Detailed task info
+  - Print All Tasks → JSON format
+  - Print App State → Window states, filter text, current ID
+  - Manually Advance to Next Task → Test advancement algorithm (Phase 2)
+  - Open Logs Folder → Opens ~/Library/Containers/.../Documents/
+- **Critical for Phase Testing**: Verify task hierarchy, current pointer, and state
+
+**`Managers/ToastManager.swift`** (`HoldApp/Managers/ToastManager.swift`)
+- **Responsibility**: Toast notification system
+- **Usage**: `ToastManager.shared.showSuccess("message")` or `.showError("message")`
+- **Toast Types**:
+  - Success (green checkmark)
+  - Error (orange warning triangle)
+- **Timing**: fadeIn (0.2s) + hold (0.8s) + fadeOut (0.2s) = 1.2s total
+
+**`UI/UIConstants.swift`** (`HoldApp/UI/UIConstants.swift`)
+- **Responsibility**: Centralized UI constants
+- **Categories**:
+  - Colors: primaryBlue, successGreen, warningOrange, errorRed, grays
+  - Typography: font sizes for Spotlight, Editor, Toast
+  - Spacing: padding, indentation, row heights
+  - Dimensions: Spotlight width/height, border radius
+  - Animations: toast timing, state transitions
+
+**`Managers/KeyboardShortcutsExtensions.swift`** (`HoldApp/Managers/KeyboardShortcutsExtensions.swift`)
+- **Responsibility**: Notification names for hotkey events
+- **Note**: Placeholder for KeyboardShortcuts package (to be added in Phase 1)
+- **Current**: Uses NotificationCenter names (.showSpotlight, .showEditor, etc.)
+
+---
+
+## Updated Component Architecture
+
+### Mac App (HoldApp Target) - Phase 0
+
+**Entry Point**: `HoldApp/AppDelegate.swift`
+
+**Purpose**: SwiftData initialization, state management, task capture
+
+#### Updated AppDelegate.swift (Lines 1-112)
+
+**Phase 0 Changes:**
+- **Lines 14-16**: SwiftData ModelContainer and ModelContext
+- **Lines 19-21**: AppState, TaskManager, DebugMenuManager
+- **Lines 33-50**: SwiftData initialization with CloudKit sync (private database)
+- **Lines 53-54**: State management initialization
+- **Lines 57-58**: Debug menu setup
+- **Lines 69-91**: Task capture callback now uses TaskManager.createTask()
+- **Dual CloudKit Save**: Saves to both SwiftData (new) and legacy CloudKit (backward compat)
+- **AppState Updates**: Tracks Spotlight open/close state
+
+**Key Code Paths:**
+
+1. **Initialization** (Lines 33-58):
+   ```swift
+   ModelContainer(for: Task.self, cloudKitDatabase: .private(...))
+   appState = AppState.shared
+   taskManager = TaskManager(modelContext:appState:)
+   debugMenuManager.setupDebugMenu()
+   ```
+
+2. **Task Creation** (Lines 73):
+   ```swift
+   taskManager.createTask(text: text, parent: nil, setCurrent: true)
+   // Automatically saves to SwiftData + syncs to CloudKit
+   ```
+
+---
+
+### iOS App (HoldApp-iOS Target) - Phase 0
+
+**Entry Point**: `HoldApp-iOS/HoldApp_iOSApp.swift`
+
+#### Updated HoldApp_iOSApp.swift (Lines 1-42)
+
+**Phase 0 Changes:**
+- **Lines 17-34**: SwiftData ModelContainer with CloudKit sync (same config as Mac)
+- **Line 40**: `.modelContainer(modelContainer)` - Injects SwiftData into environment
+
+#### Updated ContentView.swift (Lines 1-125)
+
+**Phase 0 Changes:**
+- **Lines 13-14**: `@Query(filter: #Predicate<Task> { $0.isCurrent == true })`
+  - SwiftData reactive query for current task
+  - Auto-updates when isCurrent changes (no manual fetch needed)
+- **Lines 17-18**: Legacy fallback for old CloudKit records
+- **Lines 20-32**: Computed properties for display text
+- **Lines 56-61**: Debug info showing task metadata (created time)
+- **Lines 77-83**: `onChange(of: currentTasks)` - Logs when current task changes
+- **Lines 87-120**: Legacy CloudKit subscription (kept for backward compat)
+
+**Key Code Path:**
+
+1. **Reactive Display** (Lines 13-14, 24-31):
+   ```swift
+   @Query(filter: #Predicate<Task> { $0.isCurrent == true })
+   private var currentTasks: [Task]
+
+   var currentTask: Task? { currentTasks.first }
+   var displayText: String { currentTask?.text ?? "" }
+   ```
+   - SwiftData auto-updates when Mac sets isCurrent=true
+   - No manual fetch, no callbacks, pure reactive binding
+
+---
+
+## High-Level Architecture
 
 ## Component Architecture
 

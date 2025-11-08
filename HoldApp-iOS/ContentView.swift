@@ -6,84 +6,117 @@
 //
 
 import SwiftUI
-import CloudKit
+import SwiftData
 
 struct ContentView: View {
-    @State private var currentTask: String = ""
-    @State private var isLoading: Bool = true
+    // Query for current task using SwiftData
+    @Query(filter: #Predicate<Task> { $0.isCurrent == true })
+    private var currentTasks: [Task]
+
+    // Legacy support - keep listening to old CloudKit notifications
+    @State private var legacyTask: String = ""
+    @State private var useLegacy: Bool = false
+
+    var currentTask: Task? {
+        currentTasks.first
+    }
+
+    var displayText: String {
+        if let task = currentTask {
+            return task.text
+        } else if useLegacy && !legacyTask.isEmpty {
+            return legacyTask + " (legacy)"
+        } else {
+            return ""
+        }
+    }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if isLoading {
-                ProgressView()
-                    .tint(.white)
-            } else if currentTask.isEmpty {
-                Text("No tasks yet")
-                    .font(.largeTitle)
-                    .foregroundColor(.gray)
+            if displayText.isEmpty {
+                VStack(spacing: 20) {
+                    Text("No current task")
+                        .font(.system(size: 48, weight: .regular))
+                        .foregroundColor(.gray)
+
+                    Text("Create a task on Mac")
+                        .font(.system(size: 20))
+                        .foregroundColor(.gray.opacity(0.6))
+                }
             } else {
-                Text(currentTask)
-                    .font(.system(size: 48, weight: .regular))
-                    .foregroundColor(.white)
-                    .multilineTextAlignment(.center)
-                    .padding(40)
-            }
-        }
-        .onAppear {
-            print("📲 [ContentView] View appeared - initializing...")
-            setupCloudKitSubscription()
-            fetchCurrentTask()
-        }
-    }
+                VStack(spacing: 20) {
+                    Text(displayText)
+                        .font(.system(size: 48, weight: .regular))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                        .padding(40)
 
-    func fetchCurrentTask() {
-        let fetchRequestTime = Date()
-        print("📲 [ContentView] Fetch requested at \(fetchRequestTime)")
-
-        CloudKitManager.shared.fetchCurrentTask { result in
-            let totalTime = Date().timeIntervalSince(fetchRequestTime)
-
-            DispatchQueue.main.async {
-                isLoading = false
-                switch result {
-                case .success(let text):
-                    print("✅ [ContentView] UI updated in \(String(format: "%.2f", totalTime))s")
-                    print("📲 [ContentView] Displaying: \(text ?? "empty")")
-                    currentTask = text ?? ""
-                case .failure(let error):
-                    print("❌ [ContentView] Error fetching task after \(String(format: "%.2f", totalTime))s: \(error)")
+                    if let task = currentTask {
+                        // Show task metadata (for debugging Phase 0)
+                        Text("Created: \(task.createdAt.formatted(.relative(presentation: .named)))")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                    }
                 }
             }
         }
+        .onAppear {
+            print("📲 [ContentView] View appeared")
+            print("📲 [ContentView] Current tasks count: \(currentTasks.count)")
+            if let task = currentTask {
+                print("📲 [ContentView] Displaying current task: \"\(task.text)\"")
+            } else {
+                print("📲 [ContentView] No current task found")
+            }
+
+            // Keep legacy CloudKit support for now
+            setupLegacyCloudKitSubscription()
+        }
+        .onChange(of: currentTasks) { oldValue, newValue in
+            print("📲 [ContentView] Current tasks changed!")
+            print("📲 [ContentView] Old count: \(oldValue.count), New count: \(newValue.count)")
+            if let task = newValue.first {
+                print("📲 [ContentView] New current task: \"\(task.text)\"")
+            }
+        }
     }
 
-    func setupCloudKitSubscription() {
-        print("🔔 [ContentView] Setting up CloudKit subscription and notification observer...")
+    // Legacy support - will be removed after Phase 0 testing
+    func setupLegacyCloudKitSubscription() {
+        print("🔔 [ContentView] Setting up legacy CloudKit subscription...")
 
         // Subscribe to task changes
         CloudKitManager.shared.subscribeToTaskChanges { error in
             if let error = error {
-                print("❌ [ContentView] Subscription setup failed: \(error)")
+                print("❌ [ContentView] Legacy subscription setup failed: \(error)")
             } else {
-                print("✅ [ContentView] Subscription setup completed successfully")
+                print("✅ [ContentView] Legacy subscription setup completed")
             }
         }
 
-        // Listen for CloudKit notifications
+        // Listen for legacy CloudKit notifications
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("CloudKitTaskUpdated"),
             object: nil,
             queue: .main
         ) { notification in
-            print("🔔 [ContentView] Received CloudKitTaskUpdated notification!")
-            print("🔔 [ContentView] Notification object: \(String(describing: notification.object))")
-            print("🔔 [ContentView] Triggering fetch...")
-            fetchCurrentTask()
+            print("🔔 [ContentView] Received legacy CloudKitTaskUpdated notification")
+            // Fetch legacy task as fallback
+            CloudKitManager.shared.fetchCurrentTask { result in
+                switch result {
+                case .success(let text):
+                    if let text = text {
+                        legacyTask = text
+                        useLegacy = true
+                        print("📲 [ContentView] Legacy task: \(text)")
+                    }
+                case .failure(let error):
+                    print("❌ [ContentView] Legacy fetch error: \(error)")
+                }
+            }
         }
-
-        print("✅ [ContentView] NotificationCenter observer registered for CloudKitTaskUpdated")
     }
 }
 
