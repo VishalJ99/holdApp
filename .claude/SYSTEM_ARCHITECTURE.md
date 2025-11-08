@@ -1,11 +1,5 @@
 # Hold - System Architecture
 
-## Mission Statement
-
-Hold is a focus tool that helps you stay committed to ONE task at a time. Capture your current task on Mac with a quick keyboard shortcut, and see it instantly displayed on your iPhone. No lists, no distractions—just your current focus, always visible. Built with CloudKit for real-time sync across your devices with zero setup.
-
----
-
 ## High-Level Architecture
 
 ```
@@ -430,28 +424,7 @@ Result: Users never see each other's data (automatic isolation by iCloud account
 **Trigger**: Called from iPhone ContentView
 **Action**: Queries CloudKit for latest incomplete task, updates UI state
 
----
 
-## Development vs Production
-
-### Development Environment (Current):
-- **APNs**: `aps-environment = development`
-- **CloudKit**: Development schema (separate from production)
-- **Push Reliability**: Less reliable, 5-15 min subscription activation
-- **Testing**: Xcode debugger, physical devices
-
-### Production Environment (App Store):
-- **APNs**: Automatically switches to `production`
-- **CloudKit**: Production schema (deploy from CloudKit Dashboard)
-- **Push Reliability**: Highly reliable, instant subscription activation
-- **Distribution**: TestFlight → App Store
-
-**Migration Steps**:
-1. Deploy CloudKit schema to production (CloudKit Dashboard)
-2. Archive both apps for production
-3. Upload to App Store Connect
-4. APNs environment switches automatically
-5. Test on TestFlight before public release
 
 ---
 
