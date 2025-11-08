@@ -1,31 +1,41 @@
 import Cocoa
+import SwiftUI
 
 class SpotlightPanel: NSPanel {
+    private var hostingView: NSHostingView<SpotlightView>?
 
-    init() {
+    init(appState: AppState, taskManager: TaskManager) {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 60),
+            contentRect: NSRect(
+                x: 0,
+                y: 0,
+                width: UIConstants.spotlightWidth,
+                height: UIConstants.spotlightHeight
+            ),
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
 
-        // Configure panel for Spotlight-like behavior
         self.level = .floating
-        self.isMovableByWindowBackground = false
-        self.hidesOnDeactivate = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.95)
-        self.hasShadow = true
         self.isOpaque = false
+        self.backgroundColor = .clear
+        self.hasShadow = true
 
-        // Round corners
-        self.contentView?.wantsLayer = true
-        self.contentView?.layer?.cornerRadius = 12
-        self.contentView?.layer?.masksToBounds = true
+        // Create SwiftUI view
+        let spotlightView = SpotlightView(
+            appState: appState,
+            taskManager: taskManager,
+            onClose: { [weak self] in
+                self?.hide()
+            }
+        )
 
-        // Center on screen
-        self.center()
+        hostingView = NSHostingView(rootView: spotlightView)
+        self.contentView = hostingView
+
+        centerOnScreen()
     }
 
     override var canBecomeKey: Bool {
@@ -37,17 +47,21 @@ class SpotlightPanel: NSPanel {
     }
 
     func show() {
-        self.center()
-        self.orderFrontRegardless()
-        self.makeKey()
-
-        // Focus the text field if there is one
-        if let viewController = self.contentViewController as? SpotlightViewController {
-            viewController.focusTextField()
-        }
+        centerOnScreen()
+        orderFrontRegardless()
+        makeKey()
     }
 
     func hide() {
-        self.orderOut(nil)
+        orderOut(nil)
+    }
+
+    private func centerOnScreen() {
+        if let screen = NSScreen.main {
+            let screenRect = screen.visibleFrame
+            let x = screenRect.midX - frame.width / 2
+            let y = screenRect.midY + screenRect.height / 4 // Top third
+            setFrameOrigin(NSPoint(x: x, y: y))
+        }
     }
 }

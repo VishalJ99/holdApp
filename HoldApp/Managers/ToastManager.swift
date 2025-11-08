@@ -1,11 +1,10 @@
 import SwiftUI
-import Observation
+import Combine
 
-@Observable
-final class ToastManager {
+final class ToastManager: ObservableObject {
     static let shared = ToastManager()
 
-    var currentToast: ToastMessage?
+    @Published var currentToast: ToastMessage?
 
     private init() {}
 
