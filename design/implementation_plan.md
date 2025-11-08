@@ -2199,6 +2199,12 @@ git commit -m "Polish UI and add app icons"
 - Descriptive messages matching the phase goal
 - Ensure code compiles and runs before committing
 - Test checklist items for that phase before committing
+- **Update `.claude/SYSTEM_ARCHITECTURE.md`** after each phase to document new/changed components
+  - Update file structure if files added/removed
+  - Update component responsibilities if logic moved
+  - Update data flow diagrams if sync mechanism changed
+  - Update critical code paths with new line numbers
+  - Commit architecture updates separately: `git commit -m "Update architecture docs for Phase X"`
 
 ---
 
