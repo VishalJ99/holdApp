@@ -13,11 +13,12 @@
 3. [Current State Analysis](#current-state-analysis)
 4. [Architecture Overview](#architecture-overview)
 5. [Implementation Phases](#implementation-phases)
-6. [Detailed Implementation Specs](#detailed-implementation-specs)
-7. [Migration Strategy](#migration-strategy)
-8. [Testing Checklist](#testing-checklist)
-9. [Commit Strategy](#commit-strategy)
-10. [Open Questions & Risks](#open-questions--risks)
+6. [Phase Verification Outputs](#phase-verification-outputs)
+7. [Detailed Implementation Specs](#detailed-implementation-specs)
+8. [Migration Strategy](#migration-strategy)
+9. [Testing Checklist](#testing-checklist)
+10. [Commit Strategy](#commit-strategy)
+11. [Open Questions & Risks](#open-questions--risks)
 
 ---
 
@@ -725,6 +726,310 @@ Build incrementally in this order, committing after each milestone:
 7. Documentation in code (comments)
 
 **Commit**: "Polish UI and add app icons"
+
+---
+
+## Phase Verification Outputs
+
+**Critical**: Each phase must produce verifiable output so you can confirm it's working correctly before moving to the next phase.
+
+### Debug Tools (Add in Phase 0)
+
+**Debug Menu** in menu bar with commands:
+- Print Task Tree (hierarchical console output)
+- Print Current Task (details of current)
+- Print All Tasks (JSON format)
+- Print App State (currentTaskId, window states, filter text)
+- Open Logs Folder (~/Library/Containers/.../Documents/)
+
+**Enhanced Logging** in TaskManager:
+- Log all task creations with parent/child/sibling details
+- Log all completions and dismissals
+- Log task advancement algorithm steps
+- Log errors and state changes
+
+**Implementation note**: See "Detailed Implementation Specs" section for code examples
+
+---
+
+### Phase 0: Foundation - Verification
+
+**What to verify:**
+- SwiftData creates and persists tasks
+- CloudKit sync working
+- Task relationships stored correctly
+
+**How to verify:**
+1. Console shows "✅ SwiftData + CloudKit initialized"
+2. Create test task via Spotlight
+3. Check logs show task creation with all fields
+4. Debug Menu → Print Task Tree shows hierarchy with ★ for current
+5. CloudKit Dashboard shows CD_Task record
+
+**Success criteria:**
+- ✅ Tasks in console tree print
+- ✅ Tasks persist after restart
+- ✅ CloudKit sync within 5-10 seconds
+- ✅ Logs show all operations
+
+---
+
+### Phase 1: Spotlight State Machine - Verification
+
+**What to verify:**
+- All modifier key combinations work
+- Relationships (parent/child/sibling) created correctly
+- Current task pointer updates
+- Toasts show correct messages
+
+**How to verify:**
+1. Test each Enter variation: Enter, Option+Enter, Shift+Enter, Cmd+Enter, Cmd+Option+Enter
+2. Check logs show correct parent/child/sibling relationships
+3. Print Task Tree shows hierarchy with proper indentation and ★ for current
+4. Test errors when no current task (Shift+Enter, Cmd+Enter should error)
+5. Test Up/Down arrows (load current, clear text, idempotent)
+6. Verify appropriate toasts appear for each action
+
+**Success criteria:**
+- ✅ All 5 Enter variations create correct relationships
+- ✅ Tree print shows hierarchy correctly
+- ✅ Current task marked with ★
+- ✅ Toasts appear for all actions
+- ✅ Errors shown when appropriate
+- ✅ Up/Down arrows idempotent
+
+---
+
+### Phase 2: Task Queue - Verification
+
+**What to verify:**
+- Current task pointer maintained
+- Next task algorithm works (all 5 steps)
+- Queue state updates
+
+**How to verify:**
+1. Create test hierarchy: Parent → Child1 (current) → Child2, plus unrelated task
+2. Debug → Print Current Task shows Child1
+3. Call advanceToNextTask() repeatedly, check logs show:
+   - Step 1: Next sibling (Child2)
+   - Step 2: Return to parent (Parent)
+   - Step 3: Previous sibling (n/a)
+   - Step 4: Next in queue (Unrelated)
+   - Step 5: Empty state (nil)
+4. Verify each step logged with reasoning
+
+**Success criteria:**
+- ✅ Advancement follows algorithm exactly
+- ✅ Each step logged clearly
+- ✅ Empty state reached
+- ✅ Current pointer accurate
+
+---
+
+### Phase 3: Global Actions - Verification
+
+**What to verify:**
+- Complete/dismiss hotkeys work
+- Blocking when Editor/Spotlight open
+- Task advancement works
+- Toasts correct
+
+**How to verify:**
+1. Test Cmd+Shift+Enter completes task, advances to next, shows toast
+2. Test Cmd+Shift+Backspace dismisses task, advances to next, shows toast
+3. Open Spotlight, try Cmd+Shift+Enter → blocked with error toast
+4. Open Editor, try Cmd+Shift+Backspace → blocked with error toast
+5. Complete last task → empty state toast shown
+6. Debug → Print Current Task confirms empty state
+
+**Success criteria:**
+- ✅ Complete/dismiss work and advance
+- ✅ Blocking works for both windows
+- ✅ Toasts correct
+- ✅ Empty state handled
+
+---
+
+### Phase 4: Editor - Verification
+
+**What to verify:**
+- All 3 states transition correctly
+- Filter narrows results
+- Sticky filter works
+- Task actions work
+- Filter persists
+
+**How to verify:**
+1. Cmd+Shift+\ opens Editor showing tree (State 1)
+2. Type → filter mode with blue border (State 2), shows matching tasks
+3. Tab → task selected, filter dimmed (State 3)
+4. Type → returns to filter mode (sticky!)
+5. Space sets task as current (★ appears)
+6. Backspace dismisses task
+7. Close and reopen Editor → filter text persists
+8. Debug → Print Task Tree matches visual display
+
+**Success criteria:**
+- ✅ All 3 states work
+- ✅ Filter narrows real-time
+- ✅ Sticky filter on typing
+- ✅ Actions work (Space, Backspace)
+- ✅ Filter persists
+- ✅ Visual matches data
+
+---
+
+### Phase 5: Parent Selector - Verification
+
+**What to verify:**
+- Opens from Spotlight and Editor
+- Parent selection works
+- Returns correctly
+
+**How to verify:**
+1. Spotlight → Cmd+P → Parent Selector shows tree
+2. Select parent, press Enter → returns to Spotlight showing "Task → Parent"
+3. Complete task creation → Debug Tree shows task under parent
+4. Editor → select task → Cmd+P → change parent → toast confirms
+5. Debug Tree shows new relationship
+6. Test Esc cancels selection
+
+**Success criteria:**
+- ✅ Opens from both contexts
+- ✅ Selection updates correctly
+- ✅ Self-parent disabled
+- ✅ Returns properly
+- ✅ Toast confirms
+- ✅ Tree verifies relationship
+
+---
+
+### Phase 6: iPhone Display - Verification
+
+**What to verify:**
+- Shows current task (not latest)
+- Updates within 2-5s
+- Empty state works
+
+**How to verify:**
+1. Mac: Set task as current → wait 2-5s → iPhone shows it
+2. Mac: Complete task → wait 2-5s → iPhone shows next task
+3. Mac: Complete all → wait 2-5s → iPhone shows "No current task"
+4. Mac: Create 3 tasks, set 2nd as current → iPhone shows 2nd only
+5. Debug → Print Current Task confirms what iPhone should show
+
+**Success criteria:**
+- ✅ Shows isCurrent=true task
+- ✅ NOT latest by timestamp
+- ✅ Updates within 2-5s
+- ✅ Empty state correct
+- ✅ Verified by Debug menu
+
+---
+
+### Phase 7: Menu Bar - Verification
+
+**What to verify:**
+- Menu bar icon appears
+- Menu items work
+- No dock icon
+
+**How to verify:**
+1. Visual: Menu bar icon in top-right
+2. Click icon → menu appears with all items
+3. Test each menu item opens correct window/quits
+4. Dock: No Hold icon present
+
+**Success criteria:**
+- ✅ Icon visible
+- ✅ Menu functional
+- ✅ All items work
+- ✅ No dock icon
+
+---
+
+### Phase 8: Settings - Verification
+
+**What to verify:**
+- Settings window opens
+- Shortcuts customizable
+- Changes persist
+
+**How to verify:**
+1. Menu → Settings → window opens to Keyboard Shortcuts
+2. Click shortcut → press new combo → Set → row updates
+3. Test new shortcut works immediately
+4. Quit and relaunch → new shortcut still works
+5. Restore Defaults → shortcuts reset
+
+**Success criteria:**
+- ✅ Settings opens
+- ✅ Can customize
+- ✅ Works immediately
+- ✅ Persists after restart
+- ✅ Restore works
+
+---
+
+### Phase 9: Cheat Sheet - Verification
+
+**What to verify:**
+- Cmd+? opens overlay
+- Shows all shortcuts
+- Buttons work
+
+**How to verify:**
+1. Cmd+? → overlay appears with all shortcut categories
+2. Visual check: all shortcuts from design docs present
+3. Click "Customize Shortcuts" → Settings opens
+4. Click "Close" or Esc → overlay closes
+
+**Success criteria:**
+- ✅ Cmd+? opens
+- ✅ All shortcuts listed
+- ✅ Buttons work
+- ✅ Esc closes
+
+---
+
+### Phase 10: Polish - Verification
+
+**What to verify:**
+- Visual consistency
+- Animations smooth
+- Icons present
+- No errors
+
+**How to verify:**
+1. Visual: All interfaces use UIConstants colors/fonts/spacing
+2. Test animations: Spotlight fade, toast timing, state transitions
+3. Check icons: menu bar, app icons (Mac/iOS)
+4. Console: No errors, only expected logs
+5. VoiceOver: Navigate all interfaces, all elements labeled
+
+**Success criteria:**
+- ✅ Visual consistency
+- ✅ Animations correct
+- ✅ Icons present
+- ✅ No console errors
+- ✅ Keyboard nav works
+- ✅ VoiceOver works## Summary: Verification Strategy
+
+**Every phase includes:**
+1. ✅ **Detailed logging** - All operations logged to file and console
+2. ✅ **Debug menu** - Quick access to tree prints and state dumps
+3. ✅ **Visual feedback** - Toasts confirm all actions
+4. ✅ **Console output** - Tree and state prints verify data matches UI
+5. ✅ **Specific test cases** - Each phase has clear "how to verify" steps
+
+**Before moving to next phase:**
+- Run all verification steps
+- Check logs match expected output
+- Verify tree structure with Debug → Print Task Tree
+- Ensure no console errors
+- Test on both Mac and iPhone (where applicable)
+
+This ensures solid foundation at each step before building on top.
 
 ---
 
