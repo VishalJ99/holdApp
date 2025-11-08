@@ -740,6 +740,7 @@ Build incrementally in this order, committing after each milestone:
 - Print Current Task (details of current)
 - Print All Tasks (JSON format)
 - Print App State (currentTaskId, window states, filter text)
+- Manually Advance to Next Task (executes advancement algorithm without completing/dismissing)
 - Open Logs Folder (~/Library/Containers/.../Documents/)
 
 **Enhanced Logging** in TaskManager:
@@ -810,19 +811,21 @@ Build incrementally in this order, committing after each milestone:
 **How to verify:**
 1. Create test hierarchy: Parent → Child1 (current) → Child2, plus unrelated task
 2. Debug → Print Current Task shows Child1
-3. Call advanceToNextTask() repeatedly, check logs show:
+3. Debug → Manually Advance to Next Task (click 5 times), check logs show:
    - Step 1: Next sibling (Child2)
    - Step 2: Return to parent (Parent)
    - Step 3: Previous sibling (n/a)
    - Step 4: Next in queue (Unrelated)
    - Step 5: Empty state (nil)
 4. Verify each step logged with reasoning
+5. iPhone updates to show each new current task within 2-5s
 
 **Success criteria:**
 - ✅ Advancement follows algorithm exactly
 - ✅ Each step logged clearly
 - ✅ Empty state reached
 - ✅ Current pointer accurate
+- ✅ iPhone syncs to show new current task
 
 ---
 
@@ -1481,6 +1484,149 @@ extension Color {
         )
     }
 }
+```
+
+#### 8. Create Debug Menu
+
+Create `Managers/DebugMenuManager.swift`:
+```swift
+import SwiftUI
+import AppKit
+
+final class DebugMenuManager {
+    private let taskManager: TaskManager
+    private let appState: AppState
+
+    init(taskManager: TaskManager, appState: AppState) {
+        self.taskManager = taskManager
+        self.appState = appState
+    }
+
+    func setupDebugMenu() {
+        let mainMenu = NSApplication.shared.mainMenu!
+
+        // Create Debug menu
+        let debugMenu = NSMenu(title: "Debug")
+        let debugMenuItem = NSMenuItem(title: "Debug", action: nil, keyEquivalent: "")
+        debugMenuItem.submenu = debugMenu
+
+        // Add menu items
+        debugMenu.addItem(withTitle: "Print Task Tree", action: #selector(printTaskTree), keyEquivalent: "")
+        debugMenu.addItem(withTitle: "Print Current Task", action: #selector(printCurrentTask), keyEquivalent: "")
+        debugMenu.addItem(withTitle: "Print All Tasks", action: #selector(printAllTasks), keyEquivalent: "")
+        debugMenu.addItem(withTitle: "Print App State", action: #selector(printAppState), keyEquivalent: "")
+        debugMenu.addItem(NSMenuItem.separator())
+        debugMenu.addItem(withTitle: "Manually Advance to Next Task", action: #selector(manuallyAdvanceTask), keyEquivalent: "")
+        debugMenu.addItem(NSMenuItem.separator())
+        debugMenu.addItem(withTitle: "Open Logs Folder", action: #selector(openLogsFolder), keyEquivalent: "")
+
+        // Insert before Window menu (or append)
+        mainMenu.insertItem(debugMenuItem, at: mainMenu.items.count - 1)
+    }
+
+    @objc private func printTaskTree() {
+        print("\n=== TASK TREE ===")
+        let allTasks = taskManager.fetchActiveTasks()
+        let topLevel = allTasks.filter { $0.parent == nil }
+
+        for task in topLevel.sorted(by: { $0.sortOrder < $1.sortOrder }) {
+            printTask(task, indent: 0)
+        }
+        print("=================\n")
+    }
+
+    private func printTask(_ task: Task, indent: Int) {
+        let prefix = String(repeating: "  ", count: indent)
+        let indicator = task.isCurrent ? "★ " : ""
+        print("\(prefix)\(indicator)\(task.text)")
+
+        for child in task.children.sorted(by: { $0.sortOrder < $1.sortOrder }) {
+            printTask(child, indent: indent + 1)
+        }
+    }
+
+    @objc private func printCurrentTask() {
+        print("\n=== CURRENT TASK ===")
+        if let current = taskManager.getCurrentTask() {
+            print("ID: \(current.id)")
+            print("Text: \(current.text)")
+            print("Created: \(current.createdAt)")
+            print("Parent: \(current.parent?.text ?? "nil")")
+            print("Children: \(current.children.count)")
+            print("Sort Order: \(current.sortOrder)")
+        } else {
+            print("No current task")
+        }
+        print("====================\n")
+    }
+
+    @objc private func printAllTasks() {
+        print("\n=== ALL TASKS (JSON) ===")
+        let tasks = taskManager.fetchActiveTasks()
+        for task in tasks {
+            let json = """
+            {
+                "id": "\(task.id)",
+                "text": "\(task.text)",
+                "isCurrent": \(task.isCurrent),
+                "parent": "\(task.parent?.text ?? "null")",
+                "sortOrder": \(task.sortOrder)
+            }
+            """
+            print(json)
+        }
+        print("========================\n")
+    }
+
+    @objc private func printAppState() {
+        print("\n=== APP STATE ===")
+        print("Current Task ID: \(appState.currentTaskId?.uuidString ?? "nil")")
+        print("Spotlight Open: \(appState.isSpotlightOpen)")
+        print("Editor Open: \(appState.isEditorOpen)")
+        print("Parent Selector Open: \(appState.isParentSelectorOpen)")
+        print("Filter Text: \"\(appState.filterText)\"")
+        print("Editor Mode: \(appState.editorMode)")
+        print("=================\n")
+    }
+
+    @objc private func manuallyAdvanceTask() {
+        print("\n=== MANUALLY ADVANCING TASK ===")
+        guard let current = taskManager.getCurrentTask() else {
+            print("DEBUG: No current task to advance from")
+            print("================================\n")
+            return
+        }
+
+        print("DEBUG: Advancing from task: \"\(current.text)\"")
+
+        if let next = taskManager.advanceToNextTask() {
+            print("DEBUG: Advanced to: \"\(next.text)\"")
+        } else {
+            print("DEBUG: No more tasks (empty state)")
+        }
+        print("================================\n")
+    }
+
+    @objc private func openLogsFolder() {
+        let logsURL = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        NSWorkspace.shared.open(logsURL)
+    }
+}
+```
+
+**What "Manually Advance to Next Task" does:**
+1. Calls `TaskManager.advanceToNextTask()` - executes the 5-step algorithm
+2. Updates current task pointer (`isCurrent` flags)
+3. Logs each step to console with reasoning
+4. Syncs to iPhone via SwiftData/CloudKit
+5. Does NOT mark old task as completed/dismissed (just moves pointer)
+
+**Use in Phase 2:** Test task queue advancement algorithm before Complete/Dismiss hotkeys exist.
+
+**Initialize in AppDelegate:**
+```swift
+let debugMenuManager = DebugMenuManager(taskManager: taskManager, appState: appState)
+debugMenuManager.setupDebugMenu()
 ```
 
 ---
