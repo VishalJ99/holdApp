@@ -4,10 +4,13 @@ class LogManager {
     private let logsFileURL: URL
 
     init() {
-        // Store logs.json in the project directory
-        // For now, we'll use the application support directory as project directory may not be writable
-        let projectPath = FileManager.default.currentDirectoryPath
-        logsFileURL = URL(fileURLWithPath: projectPath).appendingPathComponent("logs.json")
+        // Store logs.json in Application Support directory
+        let appSupportURL = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        let appDirectory = appSupportURL.appendingPathComponent("HoldApp")
+        logsFileURL = appDirectory.appendingPathComponent("logs.json")
+
+        // Create directory if it doesn't exist
+        try? FileManager.default.createDirectory(at: appDirectory, withIntermediateDirectories: true)
 
         // Create empty array if file doesn't exist
         if !FileManager.default.fileExists(atPath: logsFileURL.path) {
