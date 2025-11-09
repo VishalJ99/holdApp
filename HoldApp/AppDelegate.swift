@@ -100,6 +100,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId)
                     ToastManager.shared.show("✓ Task created (current)", type: .success)
                 } else {
+                    // Auto-set first task as current if none exists
+                    if AppState.shared.currentTask == nil {
+                        AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId)
+                    }
                     ToastManager.shared.show("✓ Task created", type: .success)
                 }
 

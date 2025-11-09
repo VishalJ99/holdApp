@@ -2,7 +2,7 @@ import Cocoa
 
 class SpotlightViewController: NSViewController, TaskInputUI {
 
-    private var textField: NSTextField!
+    private var textField: SubmitTextField!
 
     // MARK: - TaskInputUI Protocol
 
@@ -25,14 +25,19 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         // Create the main view
         self.view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 60))
 
-        // Create text field
-        textField = NSTextField(frame: NSRect(x: 20, y: 15, width: 560, height: 30))
+        // Create custom text field with modifier key support
+        textField = SubmitTextField(frame: NSRect(x: 20, y: 15, width: 560, height: 30))
         textField.placeholderString = "What task are you holding?"
         textField.font = NSFont.systemFont(ofSize: 18)
         textField.isBordered = false
         textField.focusRingType = .none
         textField.backgroundColor = .clear
         textField.delegate = self
+
+        // Handle Enter key submissions with modifier detection
+        textField.onSubmit = { [weak self] modifiers in
+            self?.handleSubmit(modifiers: modifiers)
+        }
 
         view.addSubview(textField)
     }
@@ -50,46 +55,47 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         }
         super.keyDown(with: event)
     }
+
+    // MARK: - Private Methods
+
+    private func handleSubmit(modifiers: NSEvent.ModifierFlags) {
+        let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+
+        // Detect which modifier keys are pressed
+        let optionPressed = modifiers.contains(.option)
+        let shiftPressed = modifiers.contains(.shift)
+        let commandPressed = modifiers.contains(.command)
+
+        // Determine task creation type based on modifier combination
+        let creationType: TaskCreationType
+        if commandPressed && optionPressed {
+            // Cmd+Option+Enter - sibling and switch
+            creationType = .siblingAndSwitch
+        } else if commandPressed {
+            // Cmd+Enter - sibling
+            creationType = .sibling
+        } else if shiftPressed {
+            // Shift+Enter - child
+            creationType = .child
+        } else if optionPressed {
+            // Option+Enter - top-level and switch
+            creationType = .topLevelAndSwitch
+        } else {
+            // Enter - top-level
+            creationType = .topLevel
+        }
+
+        // Clear text field and submit
+        textField.stringValue = ""
+        onTaskSubmit?(text, creationType)
+    }
 }
 
 extension SpotlightViewController: NSTextFieldDelegate {
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        // Handle Enter key with modifiers
-        if commandSelector == #selector(NSResponder.insertNewline(_:)) {
-            let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !text.isEmpty else { return true }
-
-            let modifiers = NSEvent.modifierFlags
-
-            // Detect which modifier keys are pressed
-            let optionPressed = modifiers.contains(.option)
-            let shiftPressed = modifiers.contains(.shift)
-            let commandPressed = modifiers.contains(.command)
-
-            // Determine task creation type
-            let creationType: TaskCreationType
-            if commandPressed && optionPressed {
-                // Cmd+Option+Enter - sibling and switch
-                creationType = .siblingAndSwitch
-            } else if commandPressed {
-                // Cmd+Enter - sibling
-                creationType = .sibling
-            } else if shiftPressed {
-                // Shift+Enter - child
-                creationType = .child
-            } else if optionPressed {
-                // Option+Enter - top-level and switch
-                creationType = .topLevelAndSwitch
-            } else {
-                // Enter - top-level
-                creationType = .topLevel
-            }
-
-            // Clear text field and submit
-            textField.stringValue = ""
-            onTaskSubmit?(text, creationType)
-            return true
-        }
+        // Note: Enter key submissions (including modifier combinations) are handled
+        // by SubmitTextField.onSubmit callback, not here.
 
         // Handle Up Arrow - load current task
         if commandSelector == #selector(NSResponder.moveUp(_:)) {
