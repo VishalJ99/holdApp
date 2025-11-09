@@ -153,9 +153,10 @@
   - **Lines 34-38**: `onAppear` - initializes subscription and fetches current task
   - **Lines 40-59**: `fetchCurrentTask()` - queries CloudKit for latest incomplete task
   - **Lines 61-86**: `setupCloudKitSubscription()` - **CRITICAL**:
-    - Creates CKQuerySubscription for Task records (line 65)
+    - Creates CKQuerySubscription for CurrentTaskPointer records (line 65)
     - Registers NotificationCenter observer for "CloudKitTaskUpdated" (line 74)
     - When notification received → Triggers `fetchCurrentTask()` (line 82)
+    - **Note**: Subscribes to pointer updates (not Task saves) to eliminate race condition
 - **State Management**:
   - `@State private var currentTask: String` - The displayed task text
   - `@State private var isLoading: Bool` - Loading indicator state
@@ -202,13 +203,14 @@
   - **Logs**: Pointer update/creation duration, task text
   - **Purpose**: Enable instant iPhone sync without query index lag
 
-  **`subscribeToTaskChanges()` (Lines 134-164)**:
-  - Creates `CKQuerySubscription` for "Task" records
+  **`subscribeToTaskChanges()` (Lines 149-181)**:
+  - Creates `CKQuerySubscription` for "CurrentTaskPointer" records (not Task records!)
   - Options: `.firesOnRecordCreation`, `.firesOnRecordUpdate`
   - Notification: `shouldSendContentAvailable = true` (silent push)
   - **Called from**: iPhone ContentView on first launch
   - **Logs**: Subscription configuration, success/failure, subscription ID
   - **Critical**: This links the iPhone's device token to CloudKit's notification system
+  - **Race Condition Fix**: Subscribing to pointer (not Task) ensures notification only fires AFTER pointer update completes
 
 ---
 
@@ -241,18 +243,19 @@ User Input                    Mac App                    CloudKit
 ```
 CloudKit Server              APNs                      iPhone App
 ─────────────────────────────────────────────────────────────────
-1. Task record saved     →  Check subscriptions
+1. Pointer updated       →  Check subscriptions
 2. Find subscription ID  →  "55C508DF-..."
 3. Get device token      →  "d87224f72212ec54..."
 4. Send push             →  APNs servers          →  iPhone receives
 5. Silent notification   →                        →  didReceiveRemoteNotification
 6. Post local notif      →                        →  "CloudKitTaskUpdated"
 7. ContentView observes  →                        →  Triggers fetchCurrentTask()
-8. Query CloudKit        →  Fetch latest task     ←  database.perform(query)
+8. Fetch pointer by ID   →  Fetch pointer         ←  database.fetch(withRecordID:)
 9. Update UI             →                        →  Display "Buy groceries"
 ```
 
 **Timing**: < 1 second after subscription activates (5-15 min activation on first registration)
+**Key**: Subscribes to CurrentTaskPointer (not Task) to eliminate race condition
 
 ### User Isolation (Multi-User):
 
@@ -506,13 +509,16 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 - Hardcoded IDs like "CURRENT_TASK_POINTER" would be globally unique → all users would overwrite each other's pointer
 - Not suitable for personal task management
 
-### 2. CKQuerySubscription (Not Database Subscription)
-**Choice**: `CKQuerySubscription(recordType: "Task", predicate: ...)`
+### 2. CKQuerySubscription for CurrentTaskPointer (Not Task Records)
+**Choice**: `CKQuerySubscription(recordType: "CurrentTaskPointer", predicate: ...)`
 **Reasoning**:
-- Fine-grained control: only notify on Task record changes
+- **Eliminates race condition**: Notification only fires AFTER pointer update completes
+- Fine-grained control: only notify on pointer changes (when current task actually changes)
+- More efficient: iPhone doesn't wake for plain Enter tasks (only switchTo tasks)
 - Can filter by predicate (currently matches all: `NSPredicate(value: true)`)
 - Options: `.firesOnRecordCreation` and `.firesOnRecordUpdate`
 
+**Previous Bug**: Subscribed to "Task" records, but iPhone fetched from pointer → race condition
 **Alternative Considered**: `CKDatabaseSubscription` (too broad, would fire on all record types)
 
 ### 3. Silent Push Notifications
@@ -746,6 +752,17 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 
 ## Known Issues & Technical Debt
 
+### 0. CloudKit Subscription Race Condition
+**Status**: ✅ FIXED (2025-11-09)
+**Issue**: iPhone sometimes showed stale task (1 task behind) when creating tasks with Ctrl+Enter
+**Root Cause**: Subscribed to "Task" records, but iPhone fetched from "CurrentTaskPointer"
+- Task save completed → notification sent immediately
+- Pointer update still in progress → iPhone fetched old pointer value
+- Race condition: notification arrival vs pointer update completion
+**Fix**: Changed subscription from "Task" to "CurrentTaskPointer" (CloudKitManager.swift:154)
+**Impact**: Notification now only fires AFTER pointer update completes, eliminating race
+**Side Benefit**: More efficient - iPhone only wakes when current task actually changes
+
 ### 1. Modifier Key Constraints for Customization
 **Status**: ⚠️ IMPORTANT LIMITATION
 **Issue**: Not all keys can be used as modifiers with Enter key
@@ -884,5 +901,5 @@ HoldApp/
 
 **Document Location**: `/Users/vishaljain/xcode_projects/HoldApp/.claude/SYSTEM_ARCHITECTURE.md`
 
-**Last Updated**: 2025-11-04
-**Version**: 1.0 (Initial Release - Pre-TestFlight)
+**Last Updated**: 2025-11-09
+**Version**: 1.1 (Fixed CloudKit subscription race condition)

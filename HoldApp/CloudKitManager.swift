@@ -146,12 +146,12 @@ class CloudKitManager {
         }
     }
 
-    // Subscribe to task changes (for real-time updates on iPhone)
+    // Subscribe to current task pointer changes (for real-time updates on iPhone)
     func subscribeToTaskChanges(completion: @escaping (Error?) -> Void) {
         print("🔔 [CloudKit] Setting up subscription...")
 
         let subscription = CKQuerySubscription(
-            recordType: "Task",
+            recordType: "CurrentTaskPointer",
             predicate: NSPredicate(value: true),
             options: [.firesOnRecordCreation, .firesOnRecordUpdate]
         )
@@ -160,8 +160,9 @@ class CloudKitManager {
         notification.shouldSendContentAvailable = true
         subscription.notificationInfo = notification
 
-        print("🔔 [CloudKit] Subscription configured - fires on: creation, update")
+        print("🔔 [CloudKit] Subscription configured for CurrentTaskPointer - fires on: creation, update")
         print("🔔 [CloudKit] Silent notification: \(notification.shouldSendContentAvailable)")
+        print("🎯 [CloudKit] This eliminates race condition: notification only fires AFTER pointer update")
 
         database.save(subscription) { savedSubscription, error in
             if let error = error {
