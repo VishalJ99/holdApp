@@ -629,7 +629,7 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 ### Mac App: `HoldApp/HoldApp.entitlements`
 ```xml
 <key>com.apple.developer.aps-environment</key>
-<string>development</string>  <!-- Auto-switches to production on App Store -->
+<string>production</string>  <!-- Push notifications environment -->
 
 <key>com.apple.developer.icloud-container-identifiers</key>
 <array>
@@ -641,6 +641,9 @@ Event Layer                  What Gets Handled                   Modifier Behavi
     <string>CloudKit</string>
 </array>
 
+<key>com.apple.developer.icloud-container-environment</key>
+<string>Development</string>  <!-- CloudKit database environment -->
+
 <key>com.apple.security.app-sandbox</key>
 <false/>  <!-- Disabled for global hotkey access -->
 ```
@@ -648,7 +651,7 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 ### iOS App: `HoldApp-iOS/HoldApp-iOS.entitlements`
 ```xml
 <key>aps-environment</key>
-<string>development</string>  <!-- APNs environment -->
+<string>production</string>  <!-- Push notifications environment -->
 
 <key>com.apple.developer.icloud-container-identifiers</key>
 <array>
@@ -659,9 +662,31 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 <array>
     <string>CloudKit</string>
 </array>
+
+<key>com.apple.developer.icloud-container-environment</key>
+<string>Development</string>  <!-- CloudKit database environment -->
 ```
 
 **Critical**: Both apps MUST use the same CloudKit container identifier for sync to work.
+
+### CloudKit Environment Configuration
+
+**Two Separate Keys**:
+1. **`aps-environment`** - Controls push notification service (APNs)
+   - `development` - Development APNs servers
+   - `production` - Production APNs servers (auto-set by Xcode for App Store builds)
+
+2. **`com.apple.developer.icloud-container-environment`** - Controls CloudKit database
+   - `Development` - Development database (separate from production data)
+   - `Production` - Production database (real user data)
+
+**Important Limitation**:
+- **Development**: Subscriptions work in local Xcode builds ✅
+- **Production**: Subscriptions ONLY work in TestFlight/App Store builds ❌
+  - Local Xcode builds will fail with: "attempting to create a subscription in a production container"
+  - Must deploy to TestFlight to test Production subscriptions
+
+**Current Configuration**: Development environment for local testing with subscriptions enabled
 
 ---
 
