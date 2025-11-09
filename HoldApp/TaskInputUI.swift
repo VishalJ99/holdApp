@@ -37,8 +37,8 @@ protocol TaskInputUI {
 /// Types of task creation based on modifier keys
 enum TaskCreationType {
     case topLevel              // Enter - create at root
-    case topLevelAndSwitch     // Option+Enter - create at root and switch to it
+    case topLevelAndSwitch     // Ctrl+Enter - create at root and switch to it
     case child                 // Shift+Enter - create as child of current
     case sibling               // Cmd+Enter - create as sibling of current
-    case siblingAndSwitch      // Cmd+Option+Enter - create sibling and switch
+    case siblingAndSwitch      // Cmd+Ctrl+Enter - create sibling and switch
 }

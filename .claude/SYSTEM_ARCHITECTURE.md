@@ -65,17 +65,26 @@
 - **Responsibility**: The capture bar UI (text field, modifier key detection)
 - **Conforms to**: TaskInputUI protocol
 - **Key Logic**:
-  - NSViewController with single text field
-  - **Modifier Detection** (lines 57-91): Detects Option, Shift, Cmd keys on Enter press
-  - **Arrow Handlers** (lines 95-104): Up = load current task, Down = clear text
+  - NSViewController with single SubmitTextField instance
+  - **Modifier Detection** (lines 61-92): `handleSubmit()` detects Control, Shift, Cmd keys
+  - **Arrow Handlers** (lines 96-110): Up = load current task, Down = clear text
   - Handles Escape key → fires `onCancel` callback
   - Placeholder text: "What task are you holding?"
 - **Modifier Key Mappings**:
   - Enter → topLevel
-  - Option+Enter → topLevelAndSwitch
+  - **Ctrl+Enter** → topLevelAndSwitch
   - Shift+Enter → child
   - Cmd+Enter → sibling
-  - Cmd+Option+Enter → siblingAndSwitch
+  - **Cmd+Ctrl+Enter** → siblingAndSwitch
+
+**`SubmitTextField.swift`** (`HoldApp/SubmitTextField.swift`) - NEW
+- **Responsibility**: Custom NSTextField subclass for intercepting Enter key with modifiers
+- **Key Logic**:
+  - Overrides `performKeyEquivalent(with:)` to catch Enter key (keyCode 36)
+  - Extracts modifier flags: `.control`, `.shift`, `.command`
+  - Fires `onSubmit` callback with detected modifiers
+  - **Design Decision**: Uses Control instead of Option because Option+Enter is treated as text input (newline) by macOS
+- **Purpose**: Standard NSTextField doesn't trigger delegate callbacks for modifier+Enter combinations
 
 **`SpotlightPanel.swift`** (`HoldApp/SpotlightPanel.swift`)
 - **Responsibility**: The floating window that contains the capture bar
@@ -253,6 +262,219 @@ User B (sarah@icloud.com):
 
 Result: Users never see each other's data (automatic isolation by iCloud account)
 ```
+
+---
+
+## Keyboard Modifier Detection Flow
+
+### User Input → Task Creation Pipeline
+
+```
+User Action                  Component Chain                         Result
+──────────────────────────────────────────────────────────────────────────────
+1. Type "task text"      →   SubmitTextField                    →   Text stored
+2. Press Enter+Modifiers →   SubmitTextField.performKeyEquivalent →   Event captured
+3. Extract modifiers     →   modifierFlags.intersection([.option, .shift, .command])
+4. Fire callback         →   onSubmit?(modifiers)               →   Closure called
+5. Handle in ViewController → SpotlightViewController.handleSubmit()
+6. Map to type           →   TaskCreationType enum              →   Determined
+7. Submit task           →   onTaskSubmit?(text, creationType)  →   Callback fired
+8. Route to handler      →   AppDelegate.handleTaskCreation()   →   Logic routed
+9. Create task           →   CloudKitManager.saveTask()         →   Saved to CloudKit
+10. Update state         →   AppState.setCurrent()              →   Current task set
+11. Show feedback        →   ToastManager.show()                →   Toast displayed
+```
+
+### Detailed Flow Breakdown
+
+#### Step 1-4: SubmitTextField Key Interception
+**File**: `HoldApp/SubmitTextField.swift` (lines 14-26)
+
+```swift
+override func performKeyEquivalent(with event: NSEvent) -> Bool {
+    // Check for Return/Enter key (keyCode 36)
+    if event.keyCode == 36 {
+        // Extract ONLY relevant modifiers (ignore Caps Lock, Function, etc.)
+        let relevantModifiers: NSEvent.ModifierFlags = [.option, .shift, .command]
+        let modifiers = event.modifierFlags.intersection(relevantModifiers)
+
+        // Fire callback with detected modifiers
+        onSubmit?(modifiers)  // Passes to SpotlightViewController
+        return true           // Event consumed, don't pass to super
+    }
+    return super.performKeyEquivalent(with: event)
+}
+```
+
+**What Happens**:
+- macOS routes Enter key event to text field
+- `performKeyEquivalent` catches it before text processing
+- Extracts modifier flags (empty set if no modifiers pressed)
+- Calls `onSubmit` closure set by SpotlightViewController
+
+**Design Note**:
+- `performKeyEquivalent` fires for command modifiers (Control, Shift, Command)
+- Option+Enter would bypass this method (goes to text input system as newline)
+- This is why Control is used instead of Option for the "switch" modifier
+
+#### Step 5-6: SpotlightViewController Modifier Mapping
+**File**: `HoldApp/SpotlightViewController.swift` (lines 61-92)
+
+```swift
+private func handleSubmit(modifiers: NSEvent.ModifierFlags) {
+    let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return }
+
+    // Detect which modifier keys are pressed
+    let controlPressed = modifiers.contains(.control)
+    let shiftPressed = modifiers.contains(.shift)
+    let commandPressed = modifiers.contains(.command)
+
+    // Map modifier combination to task creation type
+    let creationType: TaskCreationType
+    if commandPressed && controlPressed {
+        creationType = .siblingAndSwitch      // Cmd+Ctrl+Enter
+    } else if commandPressed {
+        creationType = .sibling               // Cmd+Enter
+    } else if shiftPressed {
+        creationType = .child                 // Shift+Enter
+    } else if controlPressed {
+        creationType = .topLevelAndSwitch     // Ctrl+Enter
+    } else {
+        creationType = .topLevel              // Plain Enter
+    }
+
+    // Clear field and submit
+    textField.stringValue = ""
+    onTaskSubmit?(text, creationType)  // Passes to AppDelegate
+}
+```
+
+**TaskCreationType enum** (`HoldApp/TaskInputUI.swift:38-44`):
+```swift
+enum TaskCreationType {
+    case topLevel              // Enter - Create root task, don't switch
+    case topLevelAndSwitch     // Ctrl+Enter - Create root + make current
+    case child                 // Shift+Enter - Create child of current, always switch
+    case sibling               // Cmd+Enter - Create sibling of current, don't switch
+    case siblingAndSwitch      // Cmd+Ctrl+Enter - Create sibling + switch
+}
+```
+
+#### Step 7-8: AppDelegate Task Routing
+**File**: `HoldApp/AppDelegate.swift` (lines 58-89)
+
+```swift
+private func handleTaskCreation(text: String, type: TaskCreationType) {
+    switch type {
+    case .topLevel:
+        createTopLevelTask(text: text, switchTo: false)
+    case .topLevelAndSwitch:
+        createTopLevelTask(text: text, switchTo: true)
+    case .child:
+        guard let current = AppState.shared.currentTask else {
+            ToastManager.shared.show("⚠️ No parent task. Create a top-level task first.", type: .error)
+            return
+        }
+        createChildTask(text: text, parent: current)
+    case .sibling:
+        guard let current = AppState.shared.currentTask else {
+            ToastManager.shared.show("⚠️ No reference task. Create a task first.", type: .error)
+            return
+        }
+        createSiblingTask(text: text, reference: current, switchTo: false)
+    case .siblingAndSwitch:
+        guard let current = AppState.shared.currentTask else {
+            ToastManager.shared.show("⚠️ No reference task. Create a task first.", type: .error)
+            return
+        }
+        createSiblingTask(text: text, reference: current, switchTo: true)
+    }
+    spotlightPanel.hide()
+}
+```
+
+**Error Handling**:
+- `.child`, `.sibling`, `.siblingAndSwitch` require `AppState.shared.currentTask` to exist
+- If `currentTask == nil`, shows error toast and aborts creation
+- User must create a top-level task first (or use Ctrl+Enter to auto-set current)
+
+#### Step 9-11: Task Creation & State Update
+**File**: `HoldApp/AppDelegate.swift` (lines 91-156)
+
+**Example: `createTopLevelTask()`** (lines 91-113):
+```swift
+private func createTopLevelTask(text: String, switchTo: Bool) {
+    CloudKitManager.shared.saveTask(text: text, parentId: nil) { [weak self] result in
+        switch result {
+        case .success(let record):
+            let taskId = record.recordID.recordName
+
+            if switchTo {
+                // Ctrl+Enter case - set as current
+                AppState.shared.setCurrent(id: taskId, text: text, parentId: nil)
+                ToastManager.shared.show("✓ Task created (current)", type: .success)
+            } else {
+                // Plain Enter case - auto-set first task as current
+                if AppState.shared.currentTask == nil {
+                    AppState.shared.setCurrent(id: taskId, text: text, parentId: nil)
+                }
+                ToastManager.shared.show("✓ Task created", type: .success)
+            }
+
+            self?.logManager.log(text: text, id: taskId, parentId: nil)
+
+        case .failure(let error):
+            ToastManager.shared.show("❌ Error: \(error.localizedDescription)", type: .error)
+        }
+    }
+}
+```
+
+**Key Behaviors**:
+- `switchTo: true` → Always sets task as current, shows "(current)" toast
+- `switchTo: false` → Only sets as current if no current task exists (first task auto-set)
+- Logs to both CloudKit and local logs.json file
+- Shows success/error toast for user feedback
+
+---
+
+## macOS Event Handling Architecture
+
+### Why We Use Control Instead of Option
+
+macOS has a multi-layer event handling system for NSTextField:
+
+```
+Event Layer                  What Gets Handled                   Modifier Behavior
+──────────────────────────────────────────────────────────────────────────────────────
+1. performKeyEquivalent     Command-based shortcuts              ✅ Ctrl+Enter, Cmd+Enter, Shift+Enter
+2. keyDown                  ALL key events (pre-interpretation)  ⚠️  Catches all but breaks delegates
+3. Text Input System        Interprets keys as text/commands     ✅ Option+Enter (newline insertion)
+4. NSTextFieldDelegate      Command selectors (insertNewline)    ❌ Too late for modified Enter
+```
+
+**Current Implementation**:
+- Uses Layer 1 (`performKeyEquivalent`) with Control, Shift, Command modifiers
+- ✅ Ctrl+Enter, Shift+Enter, Cmd+Enter all work perfectly
+- ❌ Option+Enter would bypass Layer 1 → goes to text input → interpreted as newline
+
+**Why Option Doesn't Work**:
+- Option is used by macOS for typing special characters (Option+e = é, etc.)
+- Option+Enter is categorized as **text input**, not a command
+- Goes to Layer 3 (text input system) instead of Layer 1 (command handling)
+- This is a macOS design decision, not a bug
+
+**Why keyDown Doesn't Work**:
+- Layer 2 catches ALL keys (including arrows, Tab, Escape)
+- NSTextField needs these to flow through its internal delegate chain
+- If we intercept and `return` early, Arrow keys and other navigation breaks
+- Attempted during development, broke all modifier combinations
+
+**Solution**: Use Control (.control) instead of Option (.option)
+- Control is a command modifier (like Cmd/Shift)
+- Caught by `performKeyEquivalent` reliably
+- No text input conflicts
 
 ---
 
@@ -466,27 +688,63 @@ Result: Users never see each other's data (automatic isolation by iCloud account
 
 ## Known Issues & Technical Debt
 
-### 1. LogManager (Mac Only)
-**Status**: ⚠️ DEPRECATED
-**Issue**: Attempts to write to `/logs.json` (read-only filesystem)
-**Impact**: Error logged but app functions normally
-**Fix**: Remove LogManager from AppDelegate.swift (lines 16, 21, 41)
-**Reasoning**: CloudKit is single source of truth, file backup unnecessary
+### 1. Modifier Key Constraints for Customization
+**Status**: ⚠️ IMPORTANT LIMITATION
+**Issue**: Not all keys can be used as modifiers with Enter key
+**Root Cause**: macOS text input system treats certain modifier combinations as text input, not commands
+**Impact**: Limits which keys can be used for custom hotkey combinations
+**Resolution**: Changed from Option to Control modifier (see below)
 
-### 2. Subscription Activation Delay
+**Technical Explanation**:
+- **True Modifier Keys** (work with `performKeyEquivalent`):
+  - ✅ Control (.control) - Used in current implementation
+  - ✅ Shift (.shift)
+  - ✅ Command (.command)
+  - ⚠️ Caps Lock (.capsLock) - Works but is a toggle, not hold
+- **Text Input Modifiers** (bypass `performKeyEquivalent`, treated as text):
+  - ❌ Option (.option) - Option+Enter = newline character insertion
+- **Non-Modifier Keys** (cannot be used as modifiers):
+  - ❌ Tab, Arrow keys, etc. - These are key presses, not modifiers
+
+**Future Customization Guidelines**:
+If implementing user-customizable hotkeys, ONLY allow selection from:
+- Control (.control)
+- Shift (.shift)
+- Command (.command)
+- Combinations of the above
+
+Do NOT allow:
+- Option as a modifier (text input path)
+- Tab, arrows, or other keys as "modifiers" (they're key presses, not flags)
+- Any keys that require sequential press detection (timing issues, poor UX)
+
+**Current Mapping** (using Control):
+- Enter → topLevel
+- Ctrl+Enter → topLevelAndSwitch
+- Shift+Enter → child
+- Cmd+Enter → sibling
+- Cmd+Ctrl+Enter → siblingAndSwitch
+
+### 2. LogManager (Mac Only)
+**Status**: ✅ FIXED
+**Issue**: Was attempting to write to `/logs.json` (read-only filesystem)
+**Fix**: Now writes to `~/Library/Application Support/HoldApp/logs.json`
+**Impact**: Backup logging now works correctly
+
+### 3. Subscription Activation Delay
 **Status**: ⚠️ KNOWN LIMITATION
 **Issue**: First-time subscription takes 5-15 minutes to activate
 **Impact**: Push notifications don't work immediately on first install
 **Workaround**: Wait or use polling fallback in DEBUG builds
 **Fix**: None (Apple's CloudKit limitation in development)
 
-### 3. No Task Completion
+### 4. No Task Completion
 **Status**: 📝 FUTURE FEATURE
 **Issue**: Tasks are never marked as `isCompleted = true`
 **Impact**: All tasks persist in CloudKit indefinitely
 **Future**: Add swipe gesture on iPhone to mark complete, cleanup old tasks
 
-### 4. No Multi-Task Support
+### 5. No Multi-Task Support
 **Status**: 📝 FUTURE FEATURE
 **Issue**: Only shows one task at a time
 **Impact**: Can't queue or reorder tasks
@@ -503,7 +761,11 @@ HoldApp/
 │   ├── HotkeyManager.swift           # Global keyboard shortcut (Cmd+Shift+Space)
 │   ├── SpotlightViewController.swift # Capture bar UI (text field)
 │   ├── SpotlightPanel.swift          # Floating window container
-│   ├── LogManager.swift              # ⚠️ DEPRECATED file backup (broken)
+│   ├── SubmitTextField.swift         # 🆕 Custom NSTextField for modifier key detection
+│   ├── TaskInputUI.swift             # 🆕 Protocol for task input interface
+│   ├── AppState.swift                # 🆕 Global state (current task tracking)
+│   ├── ToastManager.swift            # 🆕 Temporary notification messages
+│   ├── LogManager.swift              # ✅ FIXED - Logs to Application Support directory
 │   ├── CloudKitManager.swift         # ✅ SHARED - All CloudKit operations
 │   ├── Assets.xcassets/
 │   │   └── AppIcon.appiconset/       # Mac app icon (.icns)
@@ -519,7 +781,8 @@ HoldApp/
 ├── HoldApp.xcodeproj/                # Xcode project configuration
 └── .claude/
     ├── CLAUDE.md                     # Development protocols
-    └── SYSTEM_ARCHITECTURE.md        # 📄 THIS FILE
+    ├── SYSTEM_ARCHITECTURE.md        # 📄 THIS FILE
+    └── Hold State Diagrams.md        # State machine specifications
 ```
 
 ---

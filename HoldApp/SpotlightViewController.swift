@@ -63,14 +63,14 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         guard !text.isEmpty else { return }
 
         // Detect which modifier keys are pressed
-        let optionPressed = modifiers.contains(.option)
+        let controlPressed = modifiers.contains(.control)
         let shiftPressed = modifiers.contains(.shift)
         let commandPressed = modifiers.contains(.command)
 
         // Determine task creation type based on modifier combination
         let creationType: TaskCreationType
-        if commandPressed && optionPressed {
-            // Cmd+Option+Enter - sibling and switch
+        if commandPressed && controlPressed {
+            // Cmd+Ctrl+Enter - sibling and switch
             creationType = .siblingAndSwitch
         } else if commandPressed {
             // Cmd+Enter - sibling
@@ -78,8 +78,8 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         } else if shiftPressed {
             // Shift+Enter - child
             creationType = .child
-        } else if optionPressed {
-            // Option+Enter - top-level and switch
+        } else if controlPressed {
+            // Ctrl+Enter - top-level and switch
             creationType = .topLevelAndSwitch
         } else {
             // Enter - top-level
