@@ -173,27 +173,36 @@
   **Initialization (Lines 8-13)**:
   ```swift
   container = CKContainer.default()              // iCloud.com.vishaljain.HoldApp
-  database = container.publicCloudDatabase       // Public database
+  database = container.privateCloudDatabase      // Private database (user-isolated)
   ```
   - Uses default CloudKit container (configured in entitlements)
-  - Uses public database (records still user-scoped by CloudKit automatically)
+  - Uses **private database** (isolated per Apple ID, syncs across user's devices)
 
-  **`saveTask()` (Lines 16-44)**:
+  **`saveTask()` (Lines 16-50)**:
   - Creates `CKRecord(recordType: "Task")`
-  - Sets fields: `text`, `timestamp`, `isCompleted`, **`parent_id`** (optional)
-  - **NEW**: Supports parent/child task relationships via parent_id parameter
+  - Sets fields: `text`, `timestamp`, `isCompleted`, **`isCurrent`** (boolean), **`parent_id`** (optional)
+  - Supports parent/child task relationships via parent_id parameter
+  - `isCurrent` field kept for backward compatibility (deprecated, use pointer instead)
   - Saves to database
   - **Called from**: Mac AppDelegate task creation handlers
-  - **Logs**: Save duration, record ID, parent relationship
+  - **Logs**: Save duration, record ID, parent relationship, current task status
 
-  **`fetchCurrentTask()` (Lines 39-62)**:
-  - Queries: `recordType == "Task" AND isCompleted == false`
-  - Sorts by: `timestamp` descending (most recent first)
-  - Returns: First result (latest incomplete task)
+  **`fetchCurrentTask()` (Lines 52-78)**:
+  - **Fetches by hardcoded ID**: `CKRecord.ID(recordName: "CURRENT_TASK_POINTER")`
+  - **No query, no index lag** - direct database fetch
+  - Extracts `currentTaskText` field from pointer record
+  - Returns `nil` if pointer doesn't exist (no current task set)
   - **Called from**: iPhone ContentView on app launch and notification
-  - **Logs**: Fetch duration, task text, record ID
+  - **Logs**: Fetch duration, task text, "Fetched from pointer (instant, no index lag)"
 
-  **`subscribeToTaskChanges()` (Lines 65-95)**:
+  **`updateCurrentTaskPointer()` (Lines 80-132)**:
+  - Fetches or creates singleton pointer record with ID "CURRENT_TASK_POINTER"
+  - Updates `currentTaskText` and `timestamp` fields
+  - **Called from**: Mac AppDelegate when task becomes current (Ctrl+Enter, Shift+Enter, Cmd+Ctrl+Enter)
+  - **Logs**: Pointer update/creation duration, task text
+  - **Purpose**: Enable instant iPhone sync without query index lag
+
+  **`subscribeToTaskChanges()` (Lines 134-164)**:
   - Creates `CKQuerySubscription` for "Task" records
   - Options: `.firesOnRecordCreation`, `.firesOnRecordUpdate`
   - Notification: `shouldSendContentAvailable = true` (silent push)
@@ -484,15 +493,18 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 
 ## Key Technical Decisions
 
-### 1. CloudKit Public Database
-**Choice**: `container.publicCloudDatabase`
+### 1. CloudKit Private Database
+**Choice**: `container.privateCloudDatabase`
 **Reasoning**:
-- Records are automatically user-scoped by CloudKit
-- No need for private database for single-user app
-- Simpler permission model
-- Future: Can add sharing if needed
+- **User isolation**: Each user gets their own private partition (isolated by Apple ID)
+- **Cross-device sync**: Syncs across all devices signed into the same Apple ID (Mac + iPhone)
+- **Hardcoded record IDs work correctly**: "CURRENT_TASK_POINTER" is unique per user, not shared globally
+- **Security**: Personal tasks remain private, no accidental data leakage between users
 
-**Alternative Considered**: Private database (more isolated but functionally identical for this use case)
+**Why Not Public Database**:
+- Public database is shared across ALL users of the app
+- Hardcoded IDs like "CURRENT_TASK_POINTER" would be globally unique → all users would overwrite each other's pointer
+- Not suitable for personal task management
 
 ### 2. CKQuerySubscription (Not Database Subscription)
 **Choice**: `CKQuerySubscription(recordType: "Task", predicate: ...)`
