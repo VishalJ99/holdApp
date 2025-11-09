@@ -397,7 +397,7 @@ private func handleTaskCreation(text: String, type: TaskCreationType) {
 **Error Handling**:
 - `.child`, `.sibling`, `.siblingAndSwitch` require `AppState.shared.currentTask` to exist
 - If `currentTask == nil`, shows error toast and aborts creation
-- User must create a top-level task first (or use Ctrl+Enter to auto-set current)
+- User must explicitly create and switch to a task using Ctrl+Enter to set the first current task
 
 #### Step 9-11: Task Creation & State Update
 **File**: `HoldApp/AppDelegate.swift` (lines 91-156)
@@ -405,20 +405,17 @@ private func handleTaskCreation(text: String, type: TaskCreationType) {
 **Example: `createTopLevelTask()`** (lines 91-113):
 ```swift
 private func createTopLevelTask(text: String, switchTo: Bool) {
-    CloudKitManager.shared.saveTask(text: text, parentId: nil) { [weak self] result in
+    CloudKitManager.shared.saveTask(text: text, parentId: nil, isCurrent: switchTo) { [weak self] result in
         switch result {
         case .success(let record):
             let taskId = record.recordID.recordName
 
             if switchTo {
-                // Ctrl+Enter case - set as current
+                // Ctrl+Enter case - set as current and sync to CloudKit
                 AppState.shared.setCurrent(id: taskId, text: text, parentId: nil)
                 ToastManager.shared.show("✓ Task created (current)", type: .success)
             } else {
-                // Plain Enter case - auto-set first task as current
-                if AppState.shared.currentTask == nil {
-                    AppState.shared.setCurrent(id: taskId, text: text, parentId: nil)
-                }
+                // Plain Enter case - create but don't set as current
                 ToastManager.shared.show("✓ Task created", type: .success)
             }
 
@@ -432,10 +429,17 @@ private func createTopLevelTask(text: String, switchTo: Bool) {
 ```
 
 **Key Behaviors**:
-- `switchTo: true` → Always sets task as current, shows "(current)" toast
-- `switchTo: false` → Only sets as current if no current task exists (first task auto-set)
+- `switchTo: true` → Sets task as current in AppState, saves with `isCurrent: true` to CloudKit (syncs to iPhone)
+- `switchTo: false` → Creates task without setting as current, saves with `isCurrent: false` (won't display on iPhone)
 - Logs to both CloudKit and local logs.json file
 - Shows success/error toast for user feedback
+
+**Modifier Key → isCurrent Mapping**:
+- **Enter** (.topLevel) → `isCurrent: false` - Create task, don't display on iPhone
+- **Ctrl+Enter** (.topLevelAndSwitch) → `isCurrent: true` - Create and display on iPhone
+- **Shift+Enter** (.child) → `isCurrent: true` - Child tasks always become current
+- **Cmd+Enter** (.sibling) → `isCurrent: false` - Create sibling, don't switch
+- **Cmd+Ctrl+Enter** (.siblingAndSwitch) → `isCurrent: true` - Create sibling and display on iPhone
 
 ---
 
@@ -543,15 +547,30 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 
 ### Record Type: "Task"
 
-| Field Name   | Type      | Description                          |
-|--------------|-----------|--------------------------------------|
-| `text`       | String    | The task description                 |
-| `timestamp`  | Date/Time | When task was created (for sorting)  |
-| `isCompleted`| Boolean   | Completion status (always false MVP) |
+| Field Name   | Type      | Description                                    |
+|--------------|-----------|------------------------------------------------|
+| `text`       | String    | The task description                           |
+| `timestamp`  | Date/Time | When task was created (for sorting)            |
+| `isCompleted`| Boolean   | Completion status (always false MVP)           |
+| `isCurrent`  | Boolean   | Whether this task is currently active/displayed on iPhone |
+| `parent_id`  | String?   | CloudKit record ID of parent task (nil if top-level) |
 
 **Indexes**:
 - Default index on `timestamp` for sorting
 - Default index on `isCompleted` for filtering
+- **Index on `isCurrent`** for fetching current task
+
+**Current Task Synchronization**:
+- Only ONE task should have `isCurrent = true` at any given time (represents the active task displayed on iPhone)
+- When a new task becomes current (via Ctrl+Enter, Shift+Enter, or Cmd+Ctrl+Enter), it's saved with `isCurrent = true`
+- The iOS app queries for `isCurrent == true` and sorts by `timestamp` descending to get the most recent current task
+- **Note**: Old tasks may retain `isCurrent = true` over time; query sorts by timestamp to always fetch the latest
+
+**Parent-Child Relationships**:
+- `parent_id` establishes task hierarchy (used for child/sibling creation)
+- Top-level tasks have `parent_id = nil`
+- Child tasks have `parent_id` set to their parent's CloudKit record ID
+- Sibling tasks share the same `parent_id` as their reference task
 
 **Permissions**:
 - Created by: User's iCloud account (automatic)

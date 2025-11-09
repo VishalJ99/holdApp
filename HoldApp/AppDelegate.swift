@@ -89,7 +89,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func createTopLevelTask(text: String, switchTo: Bool) {
-        CloudKitManager.shared.saveTask(text: text, parentId: nil) { [weak self] result in
+        CloudKitManager.shared.saveTask(text: text, parentId: nil, isCurrent: switchTo) { [weak self] result in
             switch result {
             case .success(let record):
                 let taskId = record.recordID.recordName
@@ -100,10 +100,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId)
                     ToastManager.shared.show("✓ Task created (current)", type: .success)
                 } else {
-                    // Auto-set first task as current if none exists
-                    if AppState.shared.currentTask == nil {
-                        AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId)
-                    }
                     ToastManager.shared.show("✓ Task created", type: .success)
                 }
 
@@ -117,7 +113,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func createChildTask(text: String, parent: TaskReference) {
-        CloudKitManager.shared.saveTask(text: text, parentId: parent.id) { [weak self] result in
+        CloudKitManager.shared.saveTask(text: text, parentId: parent.id, isCurrent: true) { [weak self] result in
             switch result {
             case .success(let record):
                 let taskId = record.recordID.recordName
@@ -137,7 +133,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func createSiblingTask(text: String, reference: TaskReference, switchTo: Bool) {
         // Sibling = same parent as reference task
-        CloudKitManager.shared.saveTask(text: text, parentId: reference.parentId) { [weak self] result in
+        CloudKitManager.shared.saveTask(text: text, parentId: reference.parentId, isCurrent: switchTo) { [weak self] result in
             switch result {
             case .success(let record):
                 let taskId = record.recordID.recordName

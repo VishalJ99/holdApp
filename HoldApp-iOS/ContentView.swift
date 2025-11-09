@@ -20,7 +20,7 @@ struct ContentView: View {
                 ProgressView()
                     .tint(.white)
             } else if currentTask.isEmpty {
-                Text("No tasks yet")
+                Text("No current task")
                     .font(.largeTitle)
                     .foregroundColor(.gray)
             } else {

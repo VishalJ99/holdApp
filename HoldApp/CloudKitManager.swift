@@ -13,7 +13,7 @@ class CloudKitManager {
     }
 
     // Save a task to CloudKit
-    func saveTask(text: String, parentId: String? = nil, completion: @escaping (Result<CKRecord, Error>) -> Void) {
+    func saveTask(text: String, parentId: String? = nil, isCurrent: Bool = false, completion: @escaping (Result<CKRecord, Error>) -> Void) {
         let saveStartTime = Date()
         print("⏱️ [CloudKit] Starting save at \(saveStartTime)")
 
@@ -21,6 +21,7 @@ class CloudKitManager {
         record["text"] = text as CKRecordValue
         record["timestamp"] = Date() as CKRecordValue
         record["isCompleted"] = false as CKRecordValue
+        record["isCurrent"] = isCurrent as CKRecordValue
 
         // Add parent_id if provided
         if let parentId = parentId {
@@ -28,6 +29,11 @@ class CloudKitManager {
             print("🔗 [CloudKit] Task has parent: \(parentId)")
         } else {
             print("🌳 [CloudKit] Task is top-level (no parent)")
+        }
+
+        // Log if this is the current task
+        if isCurrent {
+            print("⭐ [CloudKit] Task marked as CURRENT (will display on iPhone)")
         }
 
         database.save(record) { savedRecord, error in
@@ -43,13 +49,15 @@ class CloudKitManager {
         }
     }
 
-    // Fetch the most recent incomplete task
+    // Fetch the current task (marked with isCurrent = true)
     func fetchCurrentTask(completion: @escaping (Result<String?, Error>) -> Void) {
         let fetchStartTime = Date()
-        print("⏱️ [CloudKit] Starting fetch at \(fetchStartTime)")
+        print("⏱️ [CloudKit] Starting fetch for current task at \(fetchStartTime)")
 
-        let predicate = NSPredicate(format: "isCompleted == %@", NSNumber(value: false))
+        // Query for tasks marked as current
+        let predicate = NSPredicate(format: "isCurrent == %@", NSNumber(value: true))
         let query = CKQuery(recordType: "Task", predicate: predicate)
+        // Sort by timestamp descending to get the most recent current task
         query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
 
         database.perform(query, inZoneWith: nil) { records, error in
@@ -59,12 +67,12 @@ class CloudKitManager {
                 completion(.failure(error))
             } else if let record = records?.first {
                 let text = record["text"] as? String
-                print("✅ [CloudKit] Fetch completed in \(String(format: "%.2f", fetchTime))s: \(text ?? "nil")")
+                print("✅ [CloudKit] Current task fetched in \(String(format: "%.2f", fetchTime))s: \(text ?? "nil")")
                 print("📝 [CloudKit] Record ID: \(record.recordID.recordName)")
                 completion(.success(text))
             } else {
-                print("ℹ️ [CloudKit] Fetch completed in \(String(format: "%.2f", fetchTime))s: No tasks found")
-                completion(.success(nil)) // No tasks
+                print("ℹ️ [CloudKit] Fetch completed in \(String(format: "%.2f", fetchTime))s: No current task set")
+                completion(.success(nil)) // No current task
             }
         }
     }
