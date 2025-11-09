@@ -7,12 +7,45 @@
 		<key>HoldApp-iOS.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>1</integer>
+			<integer>0</integer>
 		</dict>
 		<key>HoldApp.xcscheme_^#shared#^_</key>
 		<dict>
 			<key>orderHint</key>
-			<integer>0</integer>
+			<integer>1</integer>
+		</dict>
+	</dict>
+	<key>SuppressBuildableAutocreation</key>
+	<dict>
+		<key>22A535FA2EB97CB5000F7BFD</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>22A536062EB97CB7000F7BFD</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>22A536102EB97CB7000F7BFD</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>22ABCE132EB927DE00A43380</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>22ABCE242EB927E000A43380</key>
+		<dict>
+			<key>primary</key>
+			<true/>
+		</dict>
+		<key>22ABCE2E2EB927E000A43380</key>
+		<dict>
+			<key>primary</key>
+			<true/>
 		</dict>
 	</dict>
 </dict>
