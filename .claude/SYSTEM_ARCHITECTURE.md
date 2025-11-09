@@ -552,25 +552,52 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 | `text`       | String    | The task description                           |
 | `timestamp`  | Date/Time | When task was created (for sorting)            |
 | `isCompleted`| Boolean   | Completion status (always false MVP)           |
-| `isCurrent`  | Boolean   | Whether this task is currently active/displayed on iPhone |
+| `isCurrent`  | Boolean   | DEPRECATED - kept for backward compatibility |
 | `parent_id`  | String?   | CloudKit record ID of parent task (nil if top-level) |
 
 **Indexes**:
 - Default index on `timestamp` for sorting
 - Default index on `isCompleted` for filtering
-- **Index on `isCurrent`** for fetching current task
-
-**Current Task Synchronization**:
-- Only ONE task should have `isCurrent = true` at any given time (represents the active task displayed on iPhone)
-- When a new task becomes current (via Ctrl+Enter, Shift+Enter, or Cmd+Ctrl+Enter), it's saved with `isCurrent = true`
-- The iOS app queries for `isCurrent == true` and sorts by `timestamp` descending to get the most recent current task
-- **Note**: Old tasks may retain `isCurrent = true` over time; query sorts by timestamp to always fetch the latest
 
 **Parent-Child Relationships**:
 - `parent_id` establishes task hierarchy (used for child/sibling creation)
 - Top-level tasks have `parent_id = nil`
 - Child tasks have `parent_id` set to their parent's CloudKit record ID
 - Sibling tasks share the same `parent_id` as their reference task
+
+### Record Type: "CurrentTaskPointer"
+
+**Purpose**: Singleton record that points to the current task, enabling instant fetch without query index lag.
+
+| Field Name        | Type      | Description                                    |
+|-------------------|-----------|------------------------------------------------|
+| `currentTaskText` | String    | Text of the currently active task              |
+| `timestamp`       | Date/Time | When this pointer was last updated             |
+
+**Record ID**: **Hardcoded to "CURRENT_TASK_POINTER"** (both macOS and iPhone know this ID)
+
+**Current Task Synchronization Flow**:
+1. **macOS creates task with Ctrl+Enter/Shift+Enter/Cmd+Ctrl+Enter**
+2. **macOS saves Task record** with `isCurrent = true` (backward compatibility)
+3. **macOS calls `updateCurrentTaskPointer(text)`**:
+   - Fetches record by ID "CURRENT_TASK_POINTER" (not a query!)
+   - If exists: updates `currentTaskText` field
+   - If not exists: creates new record with this hardcoded ID
+4. **CloudKit subscription fires** → notification sent to iPhone
+5. **iPhone calls `fetchCurrentTask()`**:
+   - Fetches by ID "CURRENT_TASK_POINTER" (bypasses query index - instant!)
+   - Extracts `currentTaskText` and displays
+6. **Result**: < 1 second sync, no index lag
+
+**Why This Works**:
+- ✅ **No query** - fetch by ID goes directly to database
+- ✅ **No index lag** - doesn't use query indexes
+- ✅ **Only one pointer** - singleton by design (hardcoded ID)
+- ✅ **Instant updates** - as soon as macOS saves, iPhone can fetch immediately
+
+**Contrast with Previous Query Approach**:
+- ❌ **Query-based**: `database.perform(CKQuery...)` → uses query index → 1-30s lag
+- ✅ **Fetch by ID**: `database.fetch(withRecordID:)` → direct database access → instant
 
 **Permissions**:
 - Created by: User's iCloud account (automatic)

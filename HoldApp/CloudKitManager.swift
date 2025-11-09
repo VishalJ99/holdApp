@@ -9,7 +9,7 @@ class CloudKitManager {
 
     private init() {
         container = CKContainer.default()
-        database = container.publicCloudDatabase
+        database = container.privateCloudDatabase
     }
 
     // Save a task to CloudKit
@@ -49,30 +49,84 @@ class CloudKitManager {
         }
     }
 
-    // Fetch the current task (marked with isCurrent = true)
+    // Fetch the current task from pointer record (bypasses query index lag)
     func fetchCurrentTask(completion: @escaping (Result<String?, Error>) -> Void) {
         let fetchStartTime = Date()
         print("⏱️ [CloudKit] Starting fetch for current task at \(fetchStartTime)")
 
-        // Query for tasks marked as current
-        let predicate = NSPredicate(format: "isCurrent == %@", NSNumber(value: true))
-        let query = CKQuery(recordType: "Task", predicate: predicate)
-        // Sort by timestamp descending to get the most recent current task
-        query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+        // Fetch pointer by hardcoded ID (no query, no index lag!)
+        let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
 
-        database.perform(query, inZoneWith: nil) { records, error in
+        database.fetch(withRecordID: pointerID) { record, error in
             let fetchTime = Date().timeIntervalSince(fetchStartTime)
-            if let error = error {
-                print("❌ [CloudKit] Fetch failed after \(String(format: "%.2f", fetchTime))s: \(error.localizedDescription)")
-                completion(.failure(error))
-            } else if let record = records?.first {
-                let text = record["text"] as? String
+
+            if let record = record {
+                let text = record["currentTaskText"] as? String
                 print("✅ [CloudKit] Current task fetched in \(String(format: "%.2f", fetchTime))s: \(text ?? "nil")")
-                print("📝 [CloudKit] Record ID: \(record.recordID.recordName)")
+                print("📝 [CloudKit] Fetched from pointer (instant, no index lag)")
                 completion(.success(text))
+            } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
+                // Pointer doesn't exist yet (no current task set)
+                print("ℹ️ [CloudKit] Fetch completed in \(String(format: "%.2f", fetchTime))s: No current task pointer found")
+                completion(.success(nil))
             } else {
-                print("ℹ️ [CloudKit] Fetch completed in \(String(format: "%.2f", fetchTime))s: No current task set")
-                completion(.success(nil)) // No current task
+                // Unexpected error
+                print("❌ [CloudKit] Fetch failed after \(String(format: "%.2f", fetchTime))s: \(error?.localizedDescription ?? "unknown")")
+                completion(.failure(error ?? NSError(domain: "CloudKitManager", code: -1, userInfo: nil)))
+            }
+        }
+    }
+
+    // Update the current task pointer record (bypasses query index lag)
+    func updateCurrentTaskPointer(text: String, completion: @escaping (Error?) -> Void) {
+        let pointerStartTime = Date()
+        print("🎯 [CloudKit] Updating current task pointer at \(pointerStartTime)")
+
+        // Use hardcoded record ID so both macOS and iPhone know where to look
+        let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
+
+        // Try to fetch existing pointer record
+        database.fetch(withRecordID: pointerID) { [weak self] record, error in
+            guard let self = self else { return }
+
+            if let existingRecord = record {
+                // Pointer exists - update it
+                print("📝 [CloudKit] Found existing pointer, updating...")
+                existingRecord["currentTaskText"] = text as CKRecordValue
+                existingRecord["timestamp"] = Date() as CKRecordValue
+
+                self.database.save(existingRecord) { savedRecord, saveError in
+                    let pointerTime = Date().timeIntervalSince(pointerStartTime)
+                    if let saveError = saveError {
+                        print("❌ [CloudKit] Pointer update failed after \(String(format: "%.2f", pointerTime))s: \(saveError.localizedDescription)")
+                        completion(saveError)
+                    } else {
+                        print("✅ [CloudKit] Pointer updated in \(String(format: "%.2f", pointerTime))s: \(text)")
+                        completion(nil)
+                    }
+                }
+            } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
+                // Pointer doesn't exist - create it
+                print("📝 [CloudKit] Pointer doesn't exist, creating new one...")
+                let newRecord = CKRecord(recordType: "CurrentTaskPointer", recordID: pointerID)
+                newRecord["currentTaskText"] = text as CKRecordValue
+                newRecord["timestamp"] = Date() as CKRecordValue
+
+                self.database.save(newRecord) { savedRecord, saveError in
+                    let pointerTime = Date().timeIntervalSince(pointerStartTime)
+                    if let saveError = saveError {
+                        print("❌ [CloudKit] Pointer creation failed after \(String(format: "%.2f", pointerTime))s: \(saveError.localizedDescription)")
+                        completion(saveError)
+                    } else {
+                        print("✅ [CloudKit] Pointer created in \(String(format: "%.2f", pointerTime))s: \(text)")
+                        completion(nil)
+                    }
+                }
+            } else {
+                // Unexpected error
+                let pointerTime = Date().timeIntervalSince(pointerStartTime)
+                print("❌ [CloudKit] Pointer fetch error after \(String(format: "%.2f", pointerTime))s: \(error?.localizedDescription ?? "unknown")")
+                completion(error)
             }
         }
     }

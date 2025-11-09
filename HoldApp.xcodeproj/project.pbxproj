@@ -51,7 +51,6 @@
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				CloudKitManager.swift,
-				SubmitTextField.swift,
 			);
 			target = 22A535FA2EB97CB5000F7BFD /* HoldApp-iOS */;
 		};

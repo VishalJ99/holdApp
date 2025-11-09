@@ -98,6 +98,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Update current task if switching
                 if switchTo {
                     AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId)
+
+                    // Update pointer for instant iPhone sync
+                    CloudKitManager.shared.updateCurrentTaskPointer(text: text) { error in
+                        if let error = error {
+                            print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
+                        }
+                    }
+
                     ToastManager.shared.show("✓ Task created (current)", type: .success)
                 } else {
                     ToastManager.shared.show("✓ Task created", type: .success)
@@ -120,6 +128,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
                 // Child tasks always become current
                 AppState.shared.setCurrent(id: taskId, text: text, parentId: parent.id)
+
+                // Update pointer for instant iPhone sync
+                CloudKitManager.shared.updateCurrentTaskPointer(text: text) { error in
+                    if let error = error {
+                        print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
+                    }
+                }
+
                 ToastManager.shared.show("✓ Child created under \(parent.text) (current)", type: .success)
 
                 // Log to file for backup
@@ -141,6 +157,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Update current task if switching
                 if switchTo {
                     AppState.shared.setCurrent(id: taskId, text: text, parentId: reference.parentId)
+
+                    // Update pointer for instant iPhone sync
+                    CloudKitManager.shared.updateCurrentTaskPointer(text: text) { error in
+                        if let error = error {
+                            print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
+                        }
+                    }
+
                     ToastManager.shared.show("✓ Sibling created (current)", type: .success)
                 } else {
                     ToastManager.shared.show("✓ Sibling created", type: .success)
