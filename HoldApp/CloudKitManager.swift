@@ -10,6 +10,21 @@ class CloudKitManager {
     private init() {
         container = CKContainer.default()
         database = container.privateCloudDatabase
+
+        // Log CloudKit configuration
+        print("☁️ [CloudKit] Initialized")
+        print("📦 [CloudKit] Container: \(container.containerIdentifier ?? "unknown")")
+        print("🌍 [CloudKit] Database: Private")
+
+        // Detect environment from entitlements (production vs development)
+        #if DEBUG
+        if let path = Bundle.main.path(forResource: "HoldApp", ofType: "entitlements"),
+           let entitlements = NSDictionary(contentsOfFile: path),
+           let apsEnv = entitlements["com.apple.developer.aps-environment"] as? String {
+            let emoji = apsEnv == "production" ? "🔴" : "🔵"
+            print("\(emoji) [CloudKit] Environment: \(apsEnv.uppercased())")
+        }
+        #endif
     }
 
     // Save a task to CloudKit
