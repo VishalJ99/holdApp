@@ -25,17 +25,26 @@ class LogManager {
         }
     }
 
-    func log(text: String) {
+    func log(text: String, id: String, parentId: String?) {
         let timestamp = ISO8601DateFormatter().string(from: Date())
-        let entry: [String: String] = [
+
+        var entry: [String: Any] = [
             "timestamp": timestamp,
-            "text": text
+            "text": text,
+            "id": id
         ]
 
+        // Add parent_id if provided (null for top-level tasks)
+        if let parentId = parentId {
+            entry["parent_id"] = parentId
+        } else {
+            entry["parent_id"] = NSNull()
+        }
+
         // Read existing logs
-        var logs: [[String: String]] = []
+        var logs: [[String: Any]] = []
         if let data = try? Data(contentsOf: logsFileURL),
-           let existingLogs = try? JSONDecoder().decode([[String: String]].self, from: data) {
+           let existingLogs = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
             logs = existingLogs
         }
 
@@ -43,7 +52,7 @@ class LogManager {
         logs.append(entry)
 
         // Write back to file
-        if let data = try? JSONEncoder().encode(logs) {
+        if let data = try? JSONSerialization.data(withJSONObject: logs, options: .prettyPrinted) {
             do {
                 try data.write(to: logsFileURL, options: .atomic)
                 print("Logged to: \(logsFileURL.path)")

@@ -13,7 +13,7 @@ class CloudKitManager {
     }
 
     // Save a task to CloudKit
-    func saveTask(text: String, completion: @escaping (Result<CKRecord, Error>) -> Void) {
+    func saveTask(text: String, parentId: String? = nil, completion: @escaping (Result<CKRecord, Error>) -> Void) {
         let saveStartTime = Date()
         print("⏱️ [CloudKit] Starting save at \(saveStartTime)")
 
@@ -21,6 +21,14 @@ class CloudKitManager {
         record["text"] = text as CKRecordValue
         record["timestamp"] = Date() as CKRecordValue
         record["isCompleted"] = false as CKRecordValue
+
+        // Add parent_id if provided
+        if let parentId = parentId {
+            record["parent_id"] = parentId as CKRecordValue
+            print("🔗 [CloudKit] Task has parent: \(parentId)")
+        } else {
+            print("🌳 [CloudKit] Task is top-level (no parent)")
+        }
 
         database.save(record) { savedRecord, error in
             let saveTime = Date().timeIntervalSince(saveStartTime)

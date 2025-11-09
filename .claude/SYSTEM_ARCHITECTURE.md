@@ -41,14 +41,18 @@
 #### Key Components:
 
 **`AppDelegate.swift`** (`HoldApp/AppDelegate.swift`)
-- **Responsibility**: App lifecycle, component initialization, task capture callback
+- **Responsibility**: App lifecycle, component initialization, task creation orchestration
 - **Key Logic**:
   - Initializes Spotlight UI, hotkey manager, and LogManager
-  - Handles `onEnterPressed` callback: saves task to CloudKit
-  - Coordinates between UI (SpotlightViewController) and data layer (CloudKitManager)
-- **Lines to Note**:
-  - Line 29-43: Task capture flow - when user presses Enter, saves to CloudKit
-  - Line 31: `CloudKitManager.shared.saveTask()` - the write operation
+  - Handles `onTaskSubmit` callback with modifier key detection
+  - Implements 5 task creation handlers (top-level, child, sibling with variations)
+  - Coordinates between UI (SpotlightViewController), state (AppState), and data layer (CloudKitManager)
+- **Task Creation Methods** (lines 58-156):
+  - `handleTaskCreation()`: Routes based on TaskCreationType
+  - `createTopLevelTask()`: Creates root task with optional switch
+  - `createChildTask()`: Creates child under current task
+  - `createSiblingTask()`: Creates sibling of current task with optional switch
+- **Error Handling**: Shows toasts for missing current task references
 
 **`HotkeyManager.swift`** (`HoldApp/HotkeyManager.swift`)
 - **Responsibility**: Global keyboard shortcut registration (Cmd+Shift+Space)
@@ -58,12 +62,20 @@
   - Currently registers Cmd+Shift+Space (lines 23-28)
 
 **`SpotlightViewController.swift`** (`HoldApp/SpotlightViewController.swift`)
-- **Responsibility**: The capture bar UI (text field, appearance)
+- **Responsibility**: The capture bar UI (text field, modifier key detection)
+- **Conforms to**: TaskInputUI protocol
 - **Key Logic**:
   - NSViewController with single text field
-  - Handles Enter key press → fires `onEnterPressed` callback
-  - Handles Escape key → fires `onEscapePressed` callback
-  - Placeholder text: "What task are you holding?" (line showing placeholder)
+  - **Modifier Detection** (lines 57-91): Detects Option, Shift, Cmd keys on Enter press
+  - **Arrow Handlers** (lines 95-104): Up = load current task, Down = clear text
+  - Handles Escape key → fires `onCancel` callback
+  - Placeholder text: "What task are you holding?"
+- **Modifier Key Mappings**:
+  - Enter → topLevel
+  - Option+Enter → topLevelAndSwitch
+  - Shift+Enter → child
+  - Cmd+Enter → sibling
+  - Cmd+Option+Enter → siblingAndSwitch
 
 **`SpotlightPanel.swift`** (`HoldApp/SpotlightPanel.swift`)
 - **Responsibility**: The floating window that contains the capture bar
@@ -74,9 +86,32 @@
   - Level: `.floating` so it appears above all windows
 
 **`LogManager.swift`** (`HoldApp/LogManager.swift`)
-- **Responsibility**: Legacy backup logging (currently broken, not critical)
-- **Status**: ⚠️ DEPRECATED - Attempts to write to `/logs.json` (read-only location)
-- **Note**: Safe to remove - CloudKit is the single source of truth
+- **Responsibility**: Local backup logging to Application Support directory
+- **Status**: ✅ WORKING - Writes to `~/Library/Application Support/HoldApp/logs.json`
+- **Key Logic**:
+  - Logs task entries with id, text, timestamp, and parent_id
+  - JSON format: `{"timestamp": "...", "text": "...", "id": "...", "parent_id": "..." or null}`
+  - Used for debugging and backup (CloudKit is primary source of truth)
+
+**`TaskInputUI.swift`** (`HoldApp/TaskInputUI.swift`) - NEW
+- **Responsibility**: Protocol defining task input interface contract
+- **Purpose**: Allows hotswapping different spotlight implementations
+- **Defines**: `show()`, `hide()`, `isVisible`, callbacks for task submission and cancellation
+- **TaskCreationType enum**: Defines 5 task creation types based on modifier keys
+
+**`AppState.swift`** (`HoldApp/AppState.swift`) - NEW
+- **Responsibility**: Global state management for current task tracking
+- **Key Data**: `currentTask` - TaskReference with id, text, parentId
+- **Purpose**: Tracks which task iPhone is currently displaying (anchor for child/sibling operations)
+- **Methods**: `setCurrent()`, `clearCurrent()`
+
+**`ToastManager.swift`** (`HoldApp/ToastManager.swift`) - NEW
+- **Responsibility**: Temporary notification messages (success/error)
+- **Key Logic**:
+  - Shows floating NSPanel with message
+  - Auto-dismisses after 2 seconds
+  - Two types: success (green) and error (red)
+  - Positioned at top center of screen
 
 ---
 
@@ -134,12 +169,13 @@
   - Uses default CloudKit container (configured in entitlements)
   - Uses public database (records still user-scoped by CloudKit automatically)
 
-  **`saveTask()` (Lines 16-36)**:
+  **`saveTask()` (Lines 16-44)**:
   - Creates `CKRecord(recordType: "Task")`
-  - Sets fields: `text`, `timestamp`, `isCompleted`
+  - Sets fields: `text`, `timestamp`, `isCompleted`, **`parent_id`** (optional)
+  - **NEW**: Supports parent/child task relationships via parent_id parameter
   - Saves to database
-  - **Called from**: Mac AppDelegate when user presses Enter
-  - **Logs**: Save duration, record ID
+  - **Called from**: Mac AppDelegate task creation handlers
+  - **Logs**: Save duration, record ID, parent relationship
 
   **`fetchCurrentTask()` (Lines 39-62)**:
   - Queries: `recordType == "Task" AND isCompleted == false`
