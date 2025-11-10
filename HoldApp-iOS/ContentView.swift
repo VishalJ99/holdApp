@@ -53,10 +53,11 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 isLoading = false
                 switch result {
-                case .success(let text):
+                case .success(let taskData):
                     print("✅ [ContentView] UI updated in \(String(format: "%.2f", totalTime))s")
-                    print("📲 [ContentView] Displaying: \(text ?? "empty")")
-                    currentTask = text ?? ""
+                    print("📲 [ContentView] Displaying: \(taskData.text ?? "empty")")
+                    print("📲 [ContentView] taskId=\(taskData.taskId ?? "nil") | parentId=\(taskData.parentId ?? "nil") | rootId=\(taskData.rootId ?? "nil")")
+                    currentTask = taskData.text ?? ""
                 case .failure(let error):
                     print("❌ [ContentView] Error fetching task after \(String(format: "%.2f", totalTime))s: \(error)")
                 }

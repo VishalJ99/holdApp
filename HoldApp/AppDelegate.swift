@@ -89,18 +89,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func createTopLevelTask(text: String, switchTo: Bool) {
-        CloudKitManager.shared.saveTask(text: text, parentId: nil, isCurrent: switchTo) { [weak self] result in
+        let parentId: String? = nil
+        let rootId: String? = nil  // Top-level task IS the root
+
+        print("📝 [Task Creation] Type: topLevel")
+        print("🌲 [Task Creation] root_id: nil (this task IS the root)")
+
+        CloudKitManager.shared.saveTask(text: text, parentId: parentId, rootId: rootId, isCurrent: switchTo) { [weak self] result in
             switch result {
             case .success(let record):
                 let taskId = record.recordID.recordName
-                let parentId: String? = nil
 
                 // Update current task if switching
                 if switchTo {
-                    AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId)
+                    AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
 
                     // Update pointer for instant iPhone sync
-                    CloudKitManager.shared.updateCurrentTaskPointer(text: text) { error in
+                    CloudKitManager.shared.updateCurrentTaskPointer(taskId: taskId, text: text, parentId: parentId, rootId: rootId) { error in
                         if let error = error {
                             print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
                         }
@@ -121,16 +126,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func createChildTask(text: String, parent: TaskReference) {
-        CloudKitManager.shared.saveTask(text: text, parentId: parent.id, isCurrent: true) { [weak self] result in
+        // Calculate root_id: inherit from parent, or use parent's ID if parent is root
+        let rootId = parent.rootId ?? parent.id
+
+        print("📝 [Task Creation] Type: child")
+        print("📊 [Task Creation] Current task: id=\(parent.id) | root_id=\(parent.rootId ?? "nil")")
+        print("🌲 [Task Creation] Calculated root_id: \(rootId)")
+        print("🧮 [Task Creation] Logic: parent.rootId ?? parent.id = \"\(parent.rootId ?? "nil")\" ?? \"\(parent.id)\" = \"\(rootId)\"")
+
+        CloudKitManager.shared.saveTask(text: text, parentId: parent.id, rootId: rootId, isCurrent: true) { [weak self] result in
             switch result {
             case .success(let record):
                 let taskId = record.recordID.recordName
 
                 // Child tasks always become current
-                AppState.shared.setCurrent(id: taskId, text: text, parentId: parent.id)
+                AppState.shared.setCurrent(id: taskId, text: text, parentId: parent.id, rootId: rootId)
 
                 // Update pointer for instant iPhone sync
-                CloudKitManager.shared.updateCurrentTaskPointer(text: text) { error in
+                CloudKitManager.shared.updateCurrentTaskPointer(taskId: taskId, text: text, parentId: parent.id, rootId: rootId) { error in
                     if let error = error {
                         print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
                     }
@@ -148,18 +161,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func createSiblingTask(text: String, reference: TaskReference, switchTo: Bool) {
-        // Sibling = same parent as reference task
-        CloudKitManager.shared.saveTask(text: text, parentId: reference.parentId, isCurrent: switchTo) { [weak self] result in
+        // Sibling = same parent and same root as reference task
+        let rootId = reference.rootId
+
+        print("📝 [Task Creation] Type: sibling")
+        print("📊 [Task Creation] Reference task: id=\(reference.id) | parent_id=\(reference.parentId ?? "nil") | root_id=\(reference.rootId ?? "nil")")
+        print("🌲 [Task Creation] Inherited root_id: \(rootId ?? "nil")")
+
+        CloudKitManager.shared.saveTask(text: text, parentId: reference.parentId, rootId: rootId, isCurrent: switchTo) { [weak self] result in
             switch result {
             case .success(let record):
                 let taskId = record.recordID.recordName
 
                 // Update current task if switching
                 if switchTo {
-                    AppState.shared.setCurrent(id: taskId, text: text, parentId: reference.parentId)
+                    AppState.shared.setCurrent(id: taskId, text: text, parentId: reference.parentId, rootId: rootId)
 
                     // Update pointer for instant iPhone sync
-                    CloudKitManager.shared.updateCurrentTaskPointer(text: text) { error in
+                    CloudKitManager.shared.updateCurrentTaskPointer(taskId: taskId, text: text, parentId: reference.parentId, rootId: rootId) { error in
                         if let error = error {
                             print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
                         }
