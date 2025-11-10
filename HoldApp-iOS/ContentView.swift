@@ -33,6 +33,11 @@ struct ContentView: View {
         }
         .onAppear {
             print("📲 [ContentView] View appeared - initializing...")
+
+            // Keep screen on while displaying task (like YouTube)
+            UIApplication.shared.isIdleTimerDisabled = true
+            print("📲 [ContentView] Screen auto-lock disabled")
+
             setupCloudKitSubscription()
             fetchCurrentTask()
         }
