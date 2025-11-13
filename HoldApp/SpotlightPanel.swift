@@ -36,6 +36,27 @@ class SpotlightPanel: NSPanel {
         return false
     }
 
+    override func cancelOperation(_ sender: Any?) {
+        // NSPanel intercepts Escape key and calls this instead of keyDown
+        print("🔍 [SpotlightPanel] cancelOperation called - Escape intercepted!")
+        hide()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        print("🔍 [SpotlightPanel] keyDown - keyCode: \(event.keyCode)")
+        super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        print("🔍 [SpotlightPanel] performKeyEquivalent - keyCode: \(event.keyCode)")
+        if event.keyCode == 53 {
+            print("🔍 [SpotlightPanel] Escape caught in performKeyEquivalent!")
+            hide()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     func show() {
         self.center()
         self.orderFrontRegardless()
