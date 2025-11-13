@@ -290,12 +290,9 @@ class CloudKitManager {
         print("🌳 [CloudKit] Fetching all tasks, will filter for roots client-side")
 
         // Fetch all tasks - CloudKit doesn't support querying for nil fields
-        // We filter client-side for parent_id == nil
+        // We filter and sort client-side
         let predicate = NSPredicate(value: true)
         let query = CKQuery(recordType: "Task", predicate: predicate)
-
-        // Sort by creation time for stable ordering (newest first)
-        query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
 
         database.perform(query, inZoneWith: nil) { records, error in
             let fetchTime = Date().timeIntervalSince(fetchStartTime)
@@ -304,8 +301,10 @@ class CloudKitManager {
                 print("❌ [CloudKit] Root fetch failed after \(String(format: "%.2f", fetchTime))s: \(error.localizedDescription)")
                 completion(.failure(error))
             } else if let records = records {
-                // Filter for root tasks (parent_id is nil) client-side
-                let rootRecords = records.filter { $0["parent_id"] == nil }
+                // Filter for root tasks (parent_id is nil) and sort by timestamp (newest first)
+                let rootRecords = records
+                    .filter { $0["parent_id"] == nil }
+                    .sorted { ($0["timestamp"] as? Date ?? Date.distantPast) > ($1["timestamp"] as? Date ?? Date.distantPast) }
 
                 let roots = rootRecords.compactMap { record -> (id: String, text: String, timestamp: Date)? in
                     guard let text = record["text"] as? String,
