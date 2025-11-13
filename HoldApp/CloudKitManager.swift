@@ -324,29 +324,50 @@ class CloudKitManager {
         let fetchStartTime = Date()
         print("🌳 [CloudKit] Fetching latest task in tree with rootId: \(rootId)")
 
-        // Query for all tasks with this root_id OR tasks that ARE this root (for single-task trees)
-        let predicate = NSPredicate(format: "root_id == %@ OR SELF == %@",
-                                   rootId,
-                                   CKRecord.ID(recordName: rootId))
+        // First, try to find descendants with this root_id
+        // CloudKit doesn't support OR or SELF predicates, so we query descendants first
+        let predicate = NSPredicate(format: "root_id == %@", rootId)
         let query = CKQuery(recordType: "Task", predicate: predicate)
 
-        // Sort by timestamp descending (newest first)
-        query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
-
-        database.perform(query, inZoneWith: nil) { records, error in
+        database.perform(query, inZoneWith: nil) { [weak self] records, error in
             let fetchTime = Date().timeIntervalSince(fetchStartTime)
 
             if let error = error {
                 print("❌ [CloudKit] Latest task fetch failed after \(String(format: "%.2f", fetchTime))s: \(error.localizedDescription)")
                 completion(.failure(error))
-            } else if let records = records, let latestTask = records.first {
-                let taskText = latestTask["text"] as? String ?? "Unknown"
-                print("✅ [CloudKit] Found latest task in tree: \(taskText) in \(String(format: "%.2f", fetchTime))s")
-                completion(.success(latestTask))
+                return
+            }
+
+            if let records = records, !records.isEmpty {
+                // Found descendants - sort client-side and return newest
+                let sortedRecords = records.sorted {
+                    ($0["timestamp"] as? Date ?? Date.distantPast) > ($1["timestamp"] as? Date ?? Date.distantPast)
+                }
+                if let latestTask = sortedRecords.first {
+                    let taskText = latestTask["text"] as? String ?? "Unknown"
+                    print("✅ [CloudKit] Found latest descendant in tree: \(taskText) in \(String(format: "%.2f", fetchTime))s")
+                    completion(.success(latestTask))
+                }
             } else {
-                print("❌ [CloudKit] No tasks found in tree after \(String(format: "%.2f", fetchTime))s")
-                let error = NSError(domain: "HoldApp", code: 404, userInfo: [NSLocalizedDescriptionKey: "No tasks found in tree"])
-                completion(.failure(error))
+                // No descendants found - this is a single-task tree, fetch the root directly
+                print("🌳 [CloudKit] No descendants found, fetching root task directly")
+                let rootRecordID = CKRecord.ID(recordName: rootId)
+                self?.database.fetch(withRecordID: rootRecordID) { record, error in
+                    let totalFetchTime = Date().timeIntervalSince(fetchStartTime)
+
+                    if let error = error {
+                        print("❌ [CloudKit] Root task fetch failed after \(String(format: "%.2f", totalFetchTime))s: \(error.localizedDescription)")
+                        completion(.failure(error))
+                    } else if let record = record {
+                        let taskText = record["text"] as? String ?? "Unknown"
+                        print("✅ [CloudKit] Found root task: \(taskText) in \(String(format: "%.2f", totalFetchTime))s")
+                        completion(.success(record))
+                    } else {
+                        print("❌ [CloudKit] No task found after \(String(format: "%.2f", totalFetchTime))s")
+                        let error = NSError(domain: "HoldApp", code: 404, userInfo: [NSLocalizedDescriptionKey: "No tasks found in tree"])
+                        completion(.failure(error))
+                    }
+                }
             }
         }
     }
