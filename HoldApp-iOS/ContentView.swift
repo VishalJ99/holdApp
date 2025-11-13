@@ -16,19 +16,6 @@ struct ContentView: View {
     @State private var showEllipsis: Bool = false
     @State private var isLoading: Bool = true
 
-    // HIERARCHY STYLING - Easy to adjust
-    private let currentFontSize: CGFloat = 48
-    private let parentFontSize: CGFloat = 32
-    private let rootFontSize: CGFloat = 20
-
-    private let currentOpacity: Double = 1.0
-    private let parentOpacity: Double = 0.65
-    private let rootOpacity: Double = 0.35
-    private let ellipsisOpacity: Double = 0.25
-
-    private let indentPerLevel: CGFloat = 40
-    private let verticalSpacing: CGFloat = 8
-
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -41,48 +28,13 @@ struct ContentView: View {
                     .font(.largeTitle)
                     .foregroundColor(.gray)
             } else {
-                // Terminal-style hierarchy display
-                VStack(alignment: .leading, spacing: verticalSpacing) {
-                    // Root task (if exists)
-                    if let root = rootTask {
-                        Text(root)
-                            .font(.system(size: rootFontSize, weight: .regular))
-                            .foregroundColor(.white.opacity(rootOpacity))
-                            .padding(.leading, 0)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    // Ellipsis indicator (if intermediate levels skipped)
-                    if showEllipsis {
-                        Text("...")
-                            .font(.system(size: rootFontSize, weight: .regular))
-                            .foregroundColor(.white.opacity(ellipsisOpacity))
-                            .padding(.leading, indentPerLevel)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    // Parent task (if exists)
-                    if let parent = parentTask {
-                        Text(parent)
-                            .font(.system(size: parentFontSize, weight: .regular))
-                            .foregroundColor(.white.opacity(parentOpacity))
-                            .padding(.leading, showEllipsis ? indentPerLevel * 2 : indentPerLevel)
-                            .multilineTextAlignment(.leading)
-                    }
-
-                    // Current task (always exists if not nil)
-                    if let current = currentTask {
-                        Text(current)
-                            .font(.system(size: currentFontSize, weight: .regular))
-                            .foregroundColor(.white.opacity(currentOpacity))
-                            .padding(.leading, showEllipsis ? indentPerLevel * 3 : indentPerLevel * 2)
-                            .multilineTextAlignment(.leading)
-                    }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .padding(.top, 60)
-                .padding(.leading, 40)
-                .padding(.trailing, 40)
+                // Centered hierarchy display with max contrast
+                HierarchyView_MaxContrast(
+                    rootTask: rootTask,
+                    parentTask: parentTask,
+                    currentTask: currentTask,
+                    showEllipsis: showEllipsis
+                )
             }
         }
         .onAppear {
@@ -210,6 +162,69 @@ struct ContentView: View {
         }
 
         print("✅ [ContentView] NotificationCenter observer registered for CloudKitTaskUpdated")
+    }
+}
+
+struct HierarchyView_MaxContrast: View {
+    let rootTask: String?
+    let parentTask: String?
+    let currentTask: String?
+    let showEllipsis: Bool
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            VStack(spacing: 2) {
+                Spacer().frame(height: 20)
+
+                // ROOT SECTION (only if level 3+)
+                if let root = rootTask {
+                    Text(root)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.white.opacity(0.65))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    // ELLIPSIS (only if level 4+)
+                    if showEllipsis {
+                        Text("···")
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(.white.opacity(0.60))
+                            .padding(.vertical, 2)
+                    }
+
+                    // Arrow after root (only shown when root exists)
+                    Text("↓")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.70))
+
+                    Spacer().frame(height: 4)
+                }
+
+                // PARENT SECTION (only if level 2+)
+                if let parent = parentTask {
+                    Text(parent)
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white.opacity(0.80))
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    Spacer().frame(height: 12)
+                }
+
+                // CURRENT TASK (always shown if exists)
+                if let current = currentTask {
+                    Text(current)
+                        .font(.system(size: 34, weight: .bold))
+                        .foregroundColor(.white)
+                        .multilineTextAlignment(.center)
+                }
+
+                Spacer().frame(height: 90)
+            }
+            .padding(.horizontal, 32)
+        }
     }
 }
 

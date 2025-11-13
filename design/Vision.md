@@ -1,4 +1,4 @@
-# Hold - Project Vision
+# Hold - Project Vision (Updated)
 
 ## One-Liner
 Hold: Stop holding tasks in your head—let your devices hold them for you.
@@ -84,13 +84,14 @@ Hold provides two missing pieces in your productivity stack:
 - Works with ANY task management system (Things, Todoist, your bullet journal, etc.)
 - Zero interaction required—it's a mirror, not an app
 
-### Mac: Your Staging Area
-- **Instant capture** at speed of thought—hotkey opens, type, done
-- Update your current task as fast as your work evolves
-- **Safe to be messy**—no forced organization, no maintenance
-- Hierarchical brain dumps preserve context without requiring structure
-- Parent/child/sibling relationships mimic how tasks pop up in your head (cause and effect)
-- Process into your real task manager later, or let completed tasks naturally fade
+### Mac: Your Capture System
+- Instant capture at speed of thought - Hotkey (`Cmd+Shift+Space`) opens quick entry
+- Hierarchical brain dumps - Tasks remember their relationships so you don't have to
+- **ONE task displayed** - Just like iPhone, enforcing singular focus
+- Keyboard navigation - Move between parent/children/siblings without seeing a list
+- Keyboard-first - Fast shortcuts for ADHD-friendly, friction-free capture
+
+**The artificial bottleneck:** You already have tabs, task managers, and complexity everywhere else. Hold refuses to show you multiple tasks. Capture is instant, but viewing is constrained—forcing you to flow through work sequentially rather than getting overwhelmed by seeing everything at once.
 
 ### How It Works Together
 
@@ -98,9 +99,29 @@ Hold provides two missing pieces in your productivity stack:
 "What should I be doing right now?" → Look at your phone → See exactly what → Return to work
 
 **The Mac solves capture:**
-Work is evolving → Hit `Cmd+Shift+Space` → Update in 2 seconds → Display updates instantly
+Work is evolving → Hit `Cmd+Shift+Space` → Update in 2 seconds → Display updates instantly on both devices
 
-**Together:** Your current objective is always visible and always accurate. You never have to remember. You never have to search.
+**Both devices show one task:** Never a list, never a tree. Navigate between tasks with keyboard shortcuts, but trust they're held. The bottleneck is the feature.
+
+**Together:** Your current objective is always visible and always accurate. You never have to remember. You never have to search. You never get overwhelmed by seeing everything at once.
+
+---
+
+## Task Hierarchies: Capturing Context Without Complexity
+
+Work naturally spawns subtasks. You're working on "Create embeddings script" and realize you need to "Debug environment setup." That debugging task doesn't exist in isolation—it's in service of the main task.
+
+Hold captures this relationship:
+- When you add a subtask, it's linked to its parent
+- Both iPhone AND Mac show only one task at a time
+- But the system remembers the connections so your brain doesn't have to
+- Navigate the hierarchy with keyboard shortcuts—never see a list
+
+**Why this matters:** The association between tasks is cognitive load. When you just add "Debug environment" to a flat list, you lose the context of why you're doing it. Your brain has to hold that "because" relationship. Hold captures it instead.
+
+**Display philosophy:** Neither device shows multiple tasks. Navigate between them, but never see them all. Trust that they're held, focus on what's now.
+
+The iPhone shows your current task with subtle hierarchy context (root → parent → current). The Mac shows the same. Both enforce singular focus while preserving the mental model of how tasks relate.
 
 ---
 
@@ -120,13 +141,34 @@ By being excellent at these two things—and nothing else—Hold complements you
 
 Process staged tasks into your main system whenever it makes sense. Or don't—completed tasks disappear, and Hold never nags you to organize them.
 
+### The Artificial Bottleneck
+
+You already have:
+- 47 browser tabs open
+- A comprehensive task manager with projects and lists  
+- Slack channels with unread messages
+- Email threads you're tracking
+- Notes scattered across files
+
+**Hold refuses to add to the noise.**
+
+Even on Mac, you only see one task. Not a list. Not a tree. One task.
+
+You can navigate—move to parent, switch between siblings, dive into children—but you never see them all at once. This isn't a limitation. It's the point.
+
+**Seeing everything is paralyzing. Seeing one thing is focusing.**
+
+The bottleneck is intentional. It forces linear progression through work. It prevents the overwhelm of looking at 20 captured tasks and freezing.
+
+Both devices mirror this philosophy: one task, always.
+
 ### Intentional Limitation as Liberation
 
-By splitting the interface into two distinct modes—capture (Mac) and focus (iPhone)—Hold eliminates the complexity that makes most productivity tools exhausting to use.
+By splitting the interface into two distinct modes—capture (Mac) and focus (iPhone)—while maintaining the same constraint (one task visible), Hold eliminates the complexity that makes most productivity tools exhausting to use.
 
-The Mac is where complexity lives: fast keyboard shortcuts, tree views, hierarchical capture. But it's **optional complexity**—you only engage with it when brain-dumping or orienting yourself.
+The Mac is where capture lives: fast keyboard shortcuts, hierarchical relationships, instant entry. But it shows one task, just like the iPhone.
 
-The iPhone is where simplicity lives: one task, passively displayed, zero decisions.
+The iPhone is where passive awareness lives: one task, readable from across the room, zero interaction.
 
 Inspired by minimalist tech like Remarkable, TRMNL, and Light Phone, combined with Apple's design language for a native, polished experience.
 
@@ -137,39 +179,67 @@ Inspired by minimalist tech like Remarkable, TRMNL, and Light Phone, combined wi
 ### Basic Flow
 
 1. **Working on Mac** → Think "I should focus on X" → Hit `Cmd+Shift+Space` → Type task → Press `Enter`
-2. **iPhone charging horizontally nearby** → Widget shows "Currently: Writing proposal | 23:45"
+2. **iPhone charging horizontally nearby** → Widget shows "Currently: Writing proposal"
 3. **Glance at widget** → Reminded of focus without breaking flow → Return to work
-4. **Work evolves** → Hit hotkey → Type new task → 2 seconds → iPhone updates
+4. **Work evolves** → Hit hotkey → Type new task → 2 seconds → Both devices update
 
 ### Real ADHD Workflow
 
-1. Working on "Create embeddings script"
+1. Working on "Create embeddings script" (displayed on both Mac menu bar and iPhone)
 2. Hit a wall, need to debug environment
 3. `Cmd+Shift+Space` → "Debug environment setup" → `Shift+Enter` (creates child, switches to it)
-4. iPhone now shows "Debug environment setup"
-5. While debugging, realize you need to check the Stack Overflow docs
+4. Both devices now show "Debug environment setup"
+5. While debugging, realize you need to check Stack Overflow
 6. `Cmd+Shift+Space` → "Review async error handling patterns" → `Option+Enter`
-7. iPhone updates instantly
+7. Both devices update instantly
 8. Complete that → `Cmd+Shift+Enter` → Auto-advances to next task
 9. Back to debugging, which leads back to original embedding work
 10. **Never lost context, never had to remember the chain, never opened your task manager**
 
-### Brain Dump Session
+### Brain Dump Session (ADHD-Friendly)
 
-1. Hit `Cmd+Shift+Space` → "Fix React bug" → `Shift+Enter` (create child)
-2. "Check colleague's work" → `Cmd+Option+Enter` (create sibling, switch to it)
-3. "Update tests" → `Cmd+Option+Enter` (another sibling)
-4. "Research animation library" → `Cmd+Enter` (sibling, don't switch)
-5. **Four subtasks captured in seconds, all properly organized, no friction**
+1. Hit `Cmd+Shift+Space` → "Fix React bug" → `Shift+Enter` (create child, switch to it)
+2. "Check colleague's work" → `Cmd+Option+Enter` (create sibling, switch to it)  
+3. "Update tests" → `Cmd+Option+Enter` (another sibling, switch)
+4. "Research animation library" → `Cmd+Enter` (create sibling, DON'T switch)
+
+**You've captured 4 tasks in seconds.** The system holds all of them, but you still only see one: "Research animation library."
+
+To navigate:
+- `Cmd+Shift+Right` → Next sibling
+- `Cmd+Shift+Left` → Previous sibling  
+- `Cmd+Shift+Up` → Parent task
+- `Cmd+Shift+Down` → First child
+
+**You trust they're captured. You focus on one at a time. The bottleneck is the feature.**
 
 ### Quick Actions Anywhere
 
 - `Cmd+Shift+Enter` → Complete current task (auto-advance to next)
 - `Cmd+Shift+Backspace` → Dismiss current task (remove it)
 - `Cmd+Shift+Z` → Undo last action
-- `Cmd+Shift+\` → Open tree view to see everything
+- `Cmd+Shift+Right/Left` → Navigate between siblings
+- `Cmd+Shift+Up/Down` → Navigate to parent/child
 
 **No setup. Minimal learning curve. No ongoing maintenance.**
+
+---
+
+## Why No List View?
+
+**Because you don't need another place to see all your tasks.**
+
+You already have that:
+- Your main task manager (Things, Todoist, Notion)
+- Your browser tabs
+- Your scattered notes
+- Your inbox
+
+Hold doesn't need to show you everything. **Hold needs to show you the one thing that matters right now.**
+
+The Mac lets you capture at the speed of thought and navigate through your working memory, but it refuses to overwhelm you with a list. Trust that tasks are captured. Focus on what's current.
+
+If you need to see everything, open your actual task manager. Hold is for flow, not planning.
 
 ---
 
@@ -183,6 +253,7 @@ Existing task manager (Things, Todoist, Notion, etc.)
 Hold Mac (Staging Area)
     ↓
   [Quick captures, brain dumps, active working memory]
+  [ONE task visible - navigate with keyboard]
     ↓
 Hold iPhone (Focus Display)
     ↓
@@ -194,12 +265,12 @@ Hold iPhone (Focus Display)
 **Morning planning in your main system:**
 - Open Things/Todoist/your bullet journal
 - Review today's work: "Build user authentication feature"
-- Set that in Hold → iPhone now displays it
+- Set that in Hold → Both devices now display it
 
 **During deep work:**
 - Realize you need to "Check JWT library docs" → `Cmd+Shift+Space` → Done in 2 seconds
-- Now iPhone shows "Check JWT library docs" while you read
-- Finish reading, need to "Install JWT package" → Update in Hold → iPhone updates instantly
+- Now both devices show "Check JWT library docs" while you read
+- Finish reading, need to "Install JWT package" → Update in Hold → Both update instantly
 - Complete installation → Return to "Build authentication"
 
 **Throughout the day:**
@@ -214,14 +285,19 @@ Hold iPhone (Focus Display)
 ## What Makes It Different
 
 - **Not a replacement task manager** - Works alongside Things, Todoist, OmniFocus, Notion, Obsidian, bullet journals, etc.
+- **Artificial bottleneck by design** - Even Mac only shows one task at a time
+- **Forces linear flow** - Navigate between tasks, but never see them all
+- **Capture without overwhelm** - Brain dump as many tasks as needed, but view one at a time
+- **Trust over visibility** - Tasks are held; you don't need to see them all to know they're safe
+- **Both devices enforce focus** - iPhone and Mac show the same single task
+- **Navigation, not visualization** - Keyboard shortcuts to move between tasks, never a list view
 - **Staging area philosophy** - Hold tasks temporarily while in flow, process them properly later
 - **RAM for your brain** - Fast capture → temporary storage → clear when complete
-- **Focus display, not task list** - iPhone shows your current objective, not everything you need to do
+- **Focus display, not task list** - Shows your current objective, not everything you need to do
 - **Always live** - Updates as your work evolves, stays accurate without effort
 - **Safe to be messy** - Like Apple Notes, but with external display and optional structure
 - **No forced organization** - Capture hierarchies if helpful, flat if not; process or ignore as needed
 - **Zero maintenance** - Completed tasks fade naturally; no ongoing tidying required
-- **Two-interface design** - Capture lives on Mac, focus lives on iPhone
 - **Out of sight is no longer out of mind** - Your current task is always visible from across your desk
 
 ---
@@ -234,11 +310,13 @@ Anyone who:
 - Has ADHD or ADHD-like working style (gets distracted easily, out of sight = out of mind)
 - Needs to see what they're working on without tab-switching
 - Finds their tasks become stale quickly as work evolves
+- Gets paralyzed by seeing too many tasks at once
 - Values Apple Notes' speed and messiness but wants optional structure
 - Works on Mac with iPhone nearby
 - Wants tools that help rather than demand attention
 - Needs rapid-fire capture without breaking concentration
 - Benefits from always-visible focus reminders
+- Wants an artificial bottleneck to prevent task-list overwhelm
 
 ---
 
@@ -246,15 +324,15 @@ Anyone who:
 
 **For** knowledge workers who already have a task management system
 
-**Who** need faster capture during flow state and constant visibility of their current objective
+**Who** need faster capture during flow state and constant visibility of their current objective without the overwhelm of seeing everything at once
 
-**Hold** is a staging area and focus display
+**Hold** is a staging area and focus display with an intentional bottleneck
 
-**That** captures speed-of-thought tasks before they're lost and displays your singular objective without distraction
+**That** captures speed-of-thought tasks before they're lost and displays only your singular objective on devices you can see
 
-**Unlike** comprehensive task managers that require proper organization upfront and live inside apps you have to open
+**Unlike** comprehensive task managers that show you everything and require proper organization upfront
 
-**Hold** acts as RAM for your productivity system—temporary, fast, messy-friendly, and always showing what matters right now on a device you can see
+**Hold** acts as RAM for your productivity system—temporary, fast, messy-friendly, showing only what matters right now, and refusing to overwhelm you with lists
 
 ---
 
@@ -265,5 +343,44 @@ Anyone who:
 The weight in the name reflects the mental weight you're releasing. When you set a task in Hold, you're not just logging it—you're letting go of the responsibility to remember it.
 
 The iPhone holds your attention on one thing.  
-The Mac holds your working memory.  
+The Mac holds your working memory—one task at a time.  
 Together, they hold space in your mind for actual work.
+
+Hold is for people who are tired of managing tasks and just want help doing them.
+
+---
+
+## Technical Implementation Notes
+
+### Mac Interface
+- **Spotlight-style capture** (`Cmd+Shift+Space`): Primary capture interface with modifier-based creation
+  - `Enter` - Create top-level task
+  - `Option+Enter` - Create and switch to it
+  - `Shift+Enter` - Create child of current
+  - `Cmd+Enter` - Create sibling of current
+  - `Cmd+Option+Enter` - Create sibling and switch
+  - `Cmd+P` - Select custom parent
+  
+- **Menu bar display**: Shows current task only (truncated if needed)
+- **Navigation shortcuts**: Move between tasks without seeing a list
+  - `Cmd+Shift+Right/Left` - Navigate siblings
+  - `Cmd+Shift+Up/Down` - Navigate parent/child
+  - `Cmd+Shift+Enter` - Complete and advance
+  - `Cmd+Shift+Backspace` - Dismiss current task
+
+### iPhone Interface
+- StandBy Mode widget
+- Displays current task with hierarchy context (root → parent → current)
+- Shows sibling indicator if current task has siblings (e.g., "2/3")
+- Updates automatically via CloudKit (2-5s lag acceptable)
+- No user interaction required
+
+### Data Model
+- Tasks stored with hierarchical relationships (parentId)
+- Current task pointer syncs across devices
+- Chronological queue for task ordering
+- Undo stack for last action
+
+---
+
+This is the vision. Build it clean, build it simple, build it native to Apple platforms. One task at a time.
