@@ -12,6 +12,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var spotlightPanel: SpotlightPanel!
     private var spotlightViewController: SpotlightViewController!
+    private var siblingSelectorPanel: SiblingSelectorPanel!
+    private var siblingSelectorViewController: SiblingSelectorViewController!
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
 
@@ -34,6 +36,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.spotlightPanel.hide()
         }
 
+        // Create Sibling Selector UI
+        siblingSelectorViewController = SiblingSelectorViewController()
+        siblingSelectorPanel = SiblingSelectorPanel()
+        siblingSelectorPanel.contentViewController = siblingSelectorViewController
+
+        // Setup sibling selector callbacks
+        siblingSelectorViewController.onSiblingSelected = { [weak self] taskId, taskText in
+            self?.handleSiblingSelection(taskId: taskId, taskText: taskText)
+        }
+
+        siblingSelectorViewController.onCancel = { [weak self] in
+            self?.siblingSelectorPanel.hide()
+        }
+
         // Setup hotkeys
         hotkeyManager = HotkeyManager()
         hotkeyManager.onShowHotkey = { [weak self] in
@@ -41,6 +57,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotkeyManager.onHideHotkey = { [weak self] in
             self?.spotlightPanel.hide()
+        }
+        hotkeyManager.onSiblingSelector = { [weak self] in
+            self?.showSiblingSelector()
         }
         hotkeyManager.registerHotkeys()
     }
@@ -104,8 +123,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if switchTo {
                     AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
 
-                    // Update pointer for instant iPhone sync
-                    CloudKitManager.shared.updateCurrentTaskPointer(taskId: taskId, text: text, parentId: parentId, rootId: rootId) { error in
+                    // Update pointer with display info (top-level has no hierarchy)
+                    CloudKitManager.shared.updateCurrentTaskPointer(
+                        taskId: taskId,
+                        text: text,
+                        parentId: nil,
+                        rootId: nil,
+                        parentTaskText: nil,
+                        rootTaskText: nil,
+                        showEllipsis: false,
+                        siblingPosition: nil,
+                        siblingCount: nil
+                    ) { error in
                         if let error = error {
                             print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
                         }
@@ -142,14 +171,90 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // Child tasks always become current
                 AppState.shared.setCurrent(id: taskId, text: text, parentId: parent.id, rootId: rootId)
 
-                // Update pointer for instant iPhone sync
-                CloudKitManager.shared.updateCurrentTaskPointer(taskId: taskId, text: text, parentId: parent.id, rootId: rootId) { error in
-                    if let error = error {
-                        print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
+                // Fetch all display info for pointer update
+                let dispatchGroup = DispatchGroup()
+                var parentTaskText: String?
+                var rootTaskText: String?
+                var showEllipsis = false
+                var siblingPosition: Int?
+                var siblingCount: Int?
+                var fetchErrors: [Error] = []
+
+                // Fetch parent task text
+                dispatchGroup.enter()
+                CloudKitManager.shared.fetchTaskById(parent.id) { result in
+                    defer { dispatchGroup.leave() }
+                    switch result {
+                    case .success(let parentRecord):
+                        parentTaskText = parentRecord["text"] as? String
+                        print("✅ [Child Creation] Fetched parent text: \(parentTaskText ?? "nil")")
+                    case .failure(let error):
+                        print("⚠️ [Child Creation] Failed to fetch parent text: \(error.localizedDescription)")
+                        fetchErrors.append(error)
                     }
                 }
 
-                ToastManager.shared.show("✓ Child created under \(parent.text) (current)", type: .success)
+                // Fetch root task text if root exists and is different from parent
+                if rootId != parent.id {
+                    dispatchGroup.enter()
+                    CloudKitManager.shared.fetchTaskById(rootId) { result in
+                        defer { dispatchGroup.leave() }
+                        switch result {
+                        case .success(let rootRecord):
+                            rootTaskText = rootRecord["text"] as? String
+                            print("✅ [Child Creation] Fetched root text: \(rootTaskText ?? "nil")")
+                        case .failure(let error):
+                            print("⚠️ [Child Creation] Failed to fetch root text: \(error.localizedDescription)")
+                            fetchErrors.append(error)
+                        }
+                    }
+                }
+
+                // Calculate showEllipsis: need to check if parent's parent != root
+                if let parentParentId = parent.parentId, parentParentId != rootId {
+                    showEllipsis = true
+                    print("📊 [Child Creation] showEllipsis=true (parent's parent exists and != root)")
+                } else {
+                    print("📊 [Child Creation] showEllipsis=false (parent's parent is root or doesn't exist)")
+                }
+
+                // Fetch siblings (children of same parent)
+                dispatchGroup.enter()
+                CloudKitManager.shared.fetchSiblings(parentId: parent.id) { result in
+                    defer { dispatchGroup.leave() }
+                    switch result {
+                    case .success(let siblings):
+                        siblingCount = siblings.count + 1  // +1 for the newly created task
+                        // Find position (new task will be last since sorted by timestamp)
+                        siblingPosition = siblingCount
+                        print("✅ [Child Creation] Sibling info: position=\(siblingPosition ?? 0)/\(siblingCount ?? 0)")
+                    case .failure(let error):
+                        print("⚠️ [Child Creation] Failed to fetch siblings: \(error.localizedDescription)")
+                        fetchErrors.append(error)
+                    }
+                }
+
+                // Wait for all fetches to complete
+                dispatchGroup.notify(queue: .main) {
+                    // Update pointer with complete display info
+                    CloudKitManager.shared.updateCurrentTaskPointer(
+                        taskId: taskId,
+                        text: text,
+                        parentId: parent.id,
+                        rootId: rootId,
+                        parentTaskText: parentTaskText,
+                        rootTaskText: rootTaskText,
+                        showEllipsis: showEllipsis,
+                        siblingPosition: siblingPosition,
+                        siblingCount: siblingCount
+                    ) { error in
+                        if let error = error {
+                            print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
+                        }
+                    }
+
+                    ToastManager.shared.show("✓ Child created under \(parent.text) (current)", type: .success)
+                }
 
                 // Log to file for backup
                 self?.logManager.log(text: text, id: taskId, parentId: parent.id)
@@ -173,20 +278,127 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             case .success(let record):
                 let taskId = record.recordID.recordName
 
-                // Update current task if switching
-                if switchTo {
-                    AppState.shared.setCurrent(id: taskId, text: text, parentId: reference.parentId, rootId: rootId)
+                // Determine which task to display on iPhone
+                let displayTaskId: String
+                let displayText: String
+                let displayParentId: String?
+                let displayRootId: String?
 
-                    // Update pointer for instant iPhone sync
-                    CloudKitManager.shared.updateCurrentTaskPointer(taskId: taskId, text: text, parentId: reference.parentId, rootId: rootId) { error in
+                if switchTo {
+                    // Switch to new sibling
+                    AppState.shared.setCurrent(id: taskId, text: text, parentId: reference.parentId, rootId: rootId)
+                    displayTaskId = taskId
+                    displayText = text
+                    displayParentId = reference.parentId
+                    displayRootId = rootId
+                } else {
+                    // Keep current task, but refresh pointer with updated sibling count
+                    guard let current = AppState.shared.currentTask else {
+                        ToastManager.shared.show("✓ Sibling created", type: .success)
+                        return
+                    }
+                    displayTaskId = current.id
+                    displayText = current.text
+                    displayParentId = current.parentId
+                    displayRootId = current.rootId
+                }
+
+                // Unified pointer update logic (works for both switchTo cases)
+                // This ensures iPhone gets updated sibling count even when not switching
+                let dispatchGroup = DispatchGroup()
+                var parentTaskText: String?
+                var rootTaskText: String?
+                var showEllipsis = false
+                var siblingPosition: Int?
+                var siblingCount: Int?
+
+                // Fetch parent task text if parent exists
+                if let parentId = displayParentId {
+                    dispatchGroup.enter()
+                    CloudKitManager.shared.fetchTaskById(parentId) { result in
+                        defer { dispatchGroup.leave() }
+                        switch result {
+                        case .success(let parentRecord):
+                            parentTaskText = parentRecord["text"] as? String
+                            print("✅ [Sibling Creation] Fetched parent text: \(parentTaskText ?? "nil")")
+
+                            // Calculate showEllipsis: check if parent's parent != root
+                            if let parentParentId = parentRecord["parent_id"] as? String,
+                               let rootId = displayRootId,
+                               parentParentId != rootId {
+                                showEllipsis = true
+                                print("📊 [Sibling Creation] showEllipsis=true (parent's parent exists and != root)")
+                            } else {
+                                print("📊 [Sibling Creation] showEllipsis=false (parent's parent is root or doesn't exist)")
+                            }
+                        case .failure(let error):
+                            print("⚠️ [Sibling Creation] Failed to fetch parent text: \(error.localizedDescription)")
+                        }
+                    }
+
+                    // Fetch root task text if root exists and is different from parent
+                    if let rootId = displayRootId, rootId != parentId {
+                        dispatchGroup.enter()
+                        CloudKitManager.shared.fetchTaskById(rootId) { result in
+                            defer { dispatchGroup.leave() }
+                            switch result {
+                            case .success(let rootRecord):
+                                rootTaskText = rootRecord["text"] as? String
+                                print("✅ [Sibling Creation] Fetched root text: \(rootTaskText ?? "nil")")
+                            case .failure(let error):
+                                print("⚠️ [Sibling Creation] Failed to fetch root text: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+
+                    // Fetch siblings - automatically includes newly created sibling!
+                    dispatchGroup.enter()
+                    CloudKitManager.shared.fetchSiblings(parentId: parentId) { result in
+                        defer { dispatchGroup.leave() }
+                        switch result {
+                        case .success(let siblings):
+                            siblingCount = siblings.count + 1  // +1 for newly created sibling (accounts for index lag)
+
+                            if switchTo {
+                                // Display task is the new sibling (goes last by timestamp)
+                                siblingPosition = siblingCount
+                            } else {
+                                // Display task is current task (find its position)
+                                if let idx = siblings.firstIndex(where: { $0.id == displayTaskId }) {
+                                    siblingPosition = idx + 1  // 1-based index
+                                } else {
+                                    siblingPosition = 1  // Fallback
+                                }
+                            }
+
+                            print("✅ [Sibling Creation] Sibling info: position=\(siblingPosition ?? 0)/\(siblingCount ?? 0)")
+                        case .failure(let error):
+                            print("⚠️ [Sibling Creation] Failed to fetch siblings: \(error.localizedDescription)")
+                        }
+                    }
+                }
+
+                // Wait for all fetches to complete
+                dispatchGroup.notify(queue: .main) {
+                    // Update pointer with complete display info
+                    CloudKitManager.shared.updateCurrentTaskPointer(
+                        taskId: displayTaskId,
+                        text: displayText,
+                        parentId: displayParentId,
+                        rootId: displayRootId,
+                        parentTaskText: parentTaskText,
+                        rootTaskText: rootTaskText,
+                        showEllipsis: showEllipsis,
+                        siblingPosition: siblingPosition,
+                        siblingCount: siblingCount
+                    ) { error in
                         if let error = error {
                             print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
                         }
                     }
 
-                    ToastManager.shared.show("✓ Sibling created (current)", type: .success)
-                } else {
-                    ToastManager.shared.show("✓ Sibling created", type: .success)
+                    let message = switchTo ? "✓ Sibling created (current)" : "✓ Sibling created"
+                    ToastManager.shared.show(message, type: .success)
                 }
 
                 // Log to file for backup
@@ -194,6 +406,183 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             case .failure(let error):
                 ToastManager.shared.show("❌ Error: \(error.localizedDescription)", type: .error)
+            }
+        }
+    }
+
+    // MARK: - Sibling Selection
+
+    private func showSiblingSelector() {
+        print("🔍 [Sibling Selector] Triggered via Cmd+Shift+S")
+
+        // Check if current task exists
+        guard let current = AppState.shared.currentTask else {
+            ToastManager.shared.show("⚠️ No current task. Switch to a task first.", type: .error)
+            print("⚠️ [Sibling Selector] No current task in AppState")
+            return
+        }
+
+        // Check if current task has a parent
+        guard let parentId = current.parentId else {
+            ToastManager.shared.show("⚠️ Current task has no parent. Cannot show siblings.", type: .error)
+            print("⚠️ [Sibling Selector] Current task is top-level (no parent)")
+            return
+        }
+
+        print("📊 [Sibling Selector] Current task: \(current.text)")
+        print("🔗 [Sibling Selector] Parent ID: \(parentId)")
+
+        // Fetch siblings from CloudKit
+        CloudKitManager.shared.fetchSiblings(parentId: parentId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let siblings):
+                    // Include the current task in the list if it's not already present
+                    var allSiblings = siblings.map { (id: $0.id, text: $0.text) }
+
+                    // Check if current task is in the list, add if missing
+                    if !allSiblings.contains(where: { $0.id == current.id }) {
+                        allSiblings.append((id: current.id, text: current.text))
+                        // Re-sort by timestamp (current task added at end)
+                        print("ℹ️ [Sibling Selector] Current task added to sibling list")
+                    }
+
+                    // Find current task's index
+                    let currentIndex = allSiblings.firstIndex(where: { $0.id == current.id }) ?? 0
+
+                    print("✅ [Sibling Selector] Found \(allSiblings.count) siblings")
+                    print("📊 [Sibling Selector] Current index: \(currentIndex + 1)/\(allSiblings.count)")
+
+                    // Show panel with siblings
+                    self?.siblingSelectorPanel.show(siblings: allSiblings, currentIndex: currentIndex)
+
+                case .failure(let error):
+                    ToastManager.shared.show("❌ Failed to fetch siblings: \(error.localizedDescription)", type: .error)
+                    print("❌ [Sibling Selector] Fetch failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func handleSiblingSelection(taskId: String, taskText: String) {
+        print("🔄 [Sibling Switch] Selected sibling: \(taskText) (ID: \(taskId))")
+
+        // Hide the panel first
+        siblingSelectorPanel.hide()
+
+        // Fetch the full task record to get all metadata
+        CloudKitManager.shared.fetchTaskById(taskId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let record):
+                    let text = record["text"] as? String ?? taskText
+                    let parentId = record["parent_id"] as? String
+                    let rootId = record["root_id"] as? String
+
+                    print("📝 [Sibling Switch] Task metadata: parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
+
+                    // Update AppState
+                    AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
+
+                    // Fetch all display info for pointer update
+                    let dispatchGroup = DispatchGroup()
+                    var parentTaskText: String?
+                    var rootTaskText: String?
+                    var showEllipsis = false
+                    var siblingPosition: Int?
+                    var siblingCount: Int?
+
+                    // Fetch parent task text
+                    if let parentId = parentId {
+                        dispatchGroup.enter()
+                        CloudKitManager.shared.fetchTaskById(parentId) { result in
+                            defer { dispatchGroup.leave() }
+                            switch result {
+                            case .success(let parentRecord):
+                                parentTaskText = parentRecord["text"] as? String
+                                print("✅ [Sibling Switch] Fetched parent text: \(parentTaskText ?? "nil")")
+
+                                // Calculate showEllipsis: check if parent's parent != root
+                                if let parentParentId = parentRecord["parent_id"] as? String,
+                                   let rootId = rootId,
+                                   parentParentId != rootId {
+                                    showEllipsis = true
+                                    print("📊 [Sibling Switch] showEllipsis=true (parent's parent exists and != root)")
+                                } else {
+                                    print("📊 [Sibling Switch] showEllipsis=false")
+                                }
+                            case .failure(let error):
+                                print("⚠️ [Sibling Switch] Failed to fetch parent text: \(error.localizedDescription)")
+                            }
+                        }
+
+                        // Fetch root task text if root exists and is different from parent
+                        if let rootId = rootId, rootId != parentId {
+                            dispatchGroup.enter()
+                            CloudKitManager.shared.fetchTaskById(rootId) { result in
+                                defer { dispatchGroup.leave() }
+                                switch result {
+                                case .success(let rootRecord):
+                                    rootTaskText = rootRecord["text"] as? String
+                                    print("✅ [Sibling Switch] Fetched root text: \(rootTaskText ?? "nil")")
+                                case .failure(let error):
+                                    print("⚠️ [Sibling Switch] Failed to fetch root text: \(error.localizedDescription)")
+                                }
+                            }
+                        }
+
+                        // Fetch siblings to get position/count
+                        dispatchGroup.enter()
+                        CloudKitManager.shared.fetchSiblings(parentId: parentId) { result in
+                            defer { dispatchGroup.leave() }
+                            switch result {
+                            case .success(let siblings):
+                                // Find position in sorted list
+                                var allSiblings = siblings
+                                if !allSiblings.contains(where: { $0.id == taskId }) {
+                                    // Add current task if not in list (edge case)
+                                    allSiblings.append((id: taskId, text: text, timestamp: Date()))
+                                }
+                                siblingCount = allSiblings.count
+                                siblingPosition = allSiblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+                                print("✅ [Sibling Switch] Sibling info: position=\(siblingPosition ?? 0)/\(siblingCount ?? 0)")
+                            case .failure(let error):
+                                print("⚠️ [Sibling Switch] Failed to fetch siblings: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+
+                    // Wait for all fetches to complete
+                    dispatchGroup.notify(queue: .main) {
+                        // Update pointer with complete display info
+                        CloudKitManager.shared.updateCurrentTaskPointer(
+                            taskId: taskId,
+                            text: text,
+                            parentId: parentId,
+                            rootId: rootId,
+                            parentTaskText: parentTaskText,
+                            rootTaskText: rootTaskText,
+                            showEllipsis: showEllipsis,
+                            siblingPosition: siblingPosition,
+                            siblingCount: siblingCount
+                        ) { error in
+                            if let error = error {
+                                print("⚠️ [Sibling Switch] Pointer update failed: \(error.localizedDescription)")
+                            }
+                        }
+
+                        // Show success toast
+                        if let position = siblingPosition, let count = siblingCount {
+                            ToastManager.shared.show("✓ Switched to sibling \(position)/\(count)", type: .success)
+                        } else {
+                            ToastManager.shared.show("✓ Switched to sibling", type: .success)
+                        }
+                    }
+
+                case .failure(let error):
+                    ToastManager.shared.show("❌ Failed to load task: \(error.localizedDescription)", type: .error)
+                    print("❌ [Sibling Switch] Task fetch failed: \(error.localizedDescription)")
+                }
             }
         }
     }

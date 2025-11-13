@@ -4,10 +4,12 @@ import Carbon
 class HotkeyManager {
     private var showHotKeyRef: EventHotKeyRef?
     private var hideHotKeyRef: EventHotKeyRef?
+    private var siblingSelectorHotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
 
     var onShowHotkey: (() -> Void)?
     var onHideHotkey: (() -> Void)?
+    var onSiblingSelector: (() -> Void)?
 
     deinit {
         unregisterHotkeys()
@@ -30,6 +32,14 @@ class HotkeyManager {
             hotkeyRef: &hideHotKeyRef
         )
 
+        // Register Command+Shift+S to show sibling selector
+        registerHotkey(
+            keyCode: UInt32(kVK_ANSI_S),
+            modifiers: UInt32(cmdKey | shiftKey),
+            hotkeyId: 3,
+            hotkeyRef: &siblingSelectorHotKeyRef
+        )
+
         // Install event handler
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
@@ -43,6 +53,8 @@ class HotkeyManager {
                 manager.onShowHotkey?()
             } else if hotkeyId.id == 2 {
                 manager.onHideHotkey?()
+            } else if hotkeyId.id == 3 {
+                manager.onSiblingSelector?()
             }
 
             return noErr
@@ -62,6 +74,10 @@ class HotkeyManager {
         if let ref = hideHotKeyRef {
             UnregisterEventHotKey(ref)
             hideHotKeyRef = nil
+        }
+        if let ref = siblingSelectorHotKeyRef {
+            UnregisterEventHotKey(ref)
+            siblingSelectorHotKeyRef = nil
         }
         if let handler = eventHandler {
             RemoveEventHandler(handler)
