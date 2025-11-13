@@ -1,5 +1,11 @@
 # Hold - System Architecture
-
+**Update Process**:
+1. Read this entire document to understand current state
+2. Make your code changes
+3. Update relevant sections in this document
+4. Verify all cross-references are still accurate
+5. Update "File Structure Summary" if files added/removed
+6. Commit code changes AND documentation updates together
 ## High-Level Architecture
 
 ```
@@ -41,25 +47,49 @@
 #### Key Components:
 
 **`AppDelegate.swift`** (`HoldApp/AppDelegate.swift`)
-- **Responsibility**: App lifecycle, component initialization, task creation orchestration
+- **Responsibility**: App lifecycle, component initialization, task creation orchestration, sibling selection
 - **Key Logic**:
-  - Initializes Spotlight UI, hotkey manager, and LogManager
+  - Initializes Spotlight UI, Sibling Selector UI, hotkey manager, and LogManager
   - Handles `onTaskSubmit` callback with modifier key detection
   - Implements 5 task creation handlers (top-level, child, sibling with variations)
-  - Coordinates between UI (SpotlightViewController), state (AppState), and data layer (CloudKitManager)
-- **Task Creation Methods** (lines 58-156):
+  - Implements sibling selection workflow (Cmd+Shift+S)
+  - Coordinates between UI (SpotlightViewController, SiblingSelectorViewController), state (AppState), and data layer (CloudKitManager)
+- **Task Creation Methods** (lines 58-384):
   - `handleTaskCreation()`: Routes based on TaskCreationType
   - `createTopLevelTask()`: Creates root task with optional switch
+    - If `switchTo: true`, fetches siblings, calculates all metadata, updates pointer with 10 fields
+    - Uses DispatchGroup to coordinate parallel fetches (no parent/root for top-level)
   - `createChildTask()`: Creates child under current task
+    - Always switches to new child (`switchTo: true` implicit)
+    - Fetches parent text, root text (if exists), calculates ellipsis, fetches siblings
+    - Uses DispatchGroup for parallel metadata fetches
+    - Updates pointer with complete hierarchy and sibling info
   - `createSiblingTask()`: Creates sibling of current task with optional switch
-- **Error Handling**: Shows toasts for missing current task references
+    - If `switchTo: true`, fetches parent text, root text, calculates ellipsis, fetches siblings
+    - Uses DispatchGroup for parallel metadata fetches
+    - Updates pointer with all display metadata
+  - **Key Pattern**: All "switch" operations (Ctrl+Enter, Shift+Enter, Cmd+Ctrl+Enter) now:
+    1. Save Task record to CloudKit
+    2. Fetch parent/root texts (if applicable) via `fetchTaskById()`
+    3. Calculate `showEllipsis` (level 4+ hierarchy: `parent.parent_id != nil && parent.parent_id != rootId`)
+    4. Fetch siblings via `fetchSiblings(parentId:)` and calculate position/count
+    5. Update CurrentTaskPointer with ALL 10 fields
+    6. Update AppState and show success toast
+- **Sibling Selection Methods** (lines 386-561):
+  - `showSiblingSelector()`: Validates current task has parent, fetches siblings, displays panel
+  - `handleSiblingSelection()`: Updates CurrentTaskPointer with selected sibling, fetches all display metadata
+    - Follows same DispatchGroup pattern as task creation for metadata fetching
+- **Error Handling**: Shows toasts for missing current task references, no parent errors, fetch failures
 
 **`HotkeyManager.swift`** (`HoldApp/HotkeyManager.swift`)
-- **Responsibility**: Global keyboard shortcut registration (Cmd+Shift+Space)
+- **Responsibility**: Global keyboard shortcut registration
 - **Key Logic**:
   - Uses Carbon API to register system-wide hotkeys
-  - Triggers show/hide callbacks for Spotlight panel
-  - Currently registers Cmd+Shift+Space (lines 23-28)
+  - Triggers callbacks for Spotlight panel and Sibling Selector
+  - Registered hotkeys:
+    - Cmd+Shift+Space (ID 1): Show Spotlight panel
+    - Escape (ID 2): Hide panel
+    - Cmd+Shift+S (ID 3): Show Sibling Selector panel
 
 **`SpotlightViewController.swift`** (`HoldApp/SpotlightViewController.swift`)
 - **Responsibility**: The capture bar UI (text field, modifier key detection)
@@ -122,6 +152,35 @@
   - Two types: success (green) and error (red)
   - Positioned at top center of screen
 
+**`SiblingSelectorViewController.swift`** (`HoldApp/SiblingSelectorViewController.swift`) - NEW
+- **Responsibility**: Displays list of sibling tasks for selection (Cmd+Shift+S)
+- **Key Logic**:
+  - Uses NSTableView to display siblings with position indicators ([1/5], [2/5], etc.)
+  - Highlights current sibling (bold, full opacity)
+  - Arrow keys navigate through list
+  - Enter key selects highlighted sibling → fires `onSiblingSelected` callback
+  - Escape key cancels → fires `onCancel` callback
+- **UI Design**:
+  - Minimal, terminal-inspired aesthetic matching Hold's vision
+  - Black background, white text, SF Pro Rounded font
+  - Current sibling: opacity 1.0, semibold
+  - Other siblings: opacity 0.7, regular weight
+  - Format: "[position/total] task text"
+- **Callbacks**:
+  - `onSiblingSelected: ((String, String) -> Void)?` - (taskId, taskText)
+  - `onCancel: (() -> Void)?`
+
+**`SiblingSelectorPanel.swift`** (`HoldApp/SiblingSelectorPanel.swift`) - NEW
+- **Responsibility**: Floating window container for sibling selector
+- **Key Logic**:
+  - NSPanel configured as borderless, floating window (level: `.floating`)
+  - Dynamically adjusts height based on sibling count (min: 100px, max: 500px)
+  - Centers on screen when shown
+  - Black background (0.95 alpha), rounded corners (12px radius)
+- **Methods**:
+  - `show(siblings: [(id: String, text: String)], currentIndex: Int)` - Display panel with sibling list
+  - `hide()` - Close panel
+
 ---
 
 ### iOS App (HoldApp-iOS Target)
@@ -149,17 +208,37 @@
 **`ContentView.swift`** (`HoldApp-iOS/ContentView.swift`)
 - **Responsibility**: The iPhone display UI and subscription setup
 - **Key Logic**:
-  - **Lines 16-33**: SwiftUI view - displays `currentTask` centered on black background
-  - **Lines 34-38**: `onAppear` - initializes subscription and fetches current task
-  - **Lines 40-59**: `fetchCurrentTask()` - queries CloudKit for latest incomplete task
-  - **Lines 61-86**: `setupCloudKitSubscription()` - **CRITICAL**:
-    - Creates CKQuerySubscription for CurrentTaskPointer records (line 65)
-    - Registers NotificationCenter observer for "CloudKitTaskUpdated" (line 74)
-    - When notification received → Triggers `fetchCurrentTask()` (line 82)
+  - **Lines 21-43**: SwiftUI view - displays hierarchical task context on black background
+    - Uses `HierarchyView_MaxContrast` component for rendering
+    - Conditionally shows root, ellipsis, parent, current task based on hierarchy depth
+    - Shows sibling position dots if task has siblings
+  - **Lines 44-53**: `onAppear` - disables screen auto-lock, initializes subscription and fetches current task
+  - **Lines 56-101**: `fetchCurrentTask()` - fetches pointer record, extracts ALL display fields:
+    - `currentText` - Current task text
+    - `parentText` - Parent task text (for hierarchy display)
+    - `rootText` - Root task text (for hierarchy display)
+    - `showEllipsis` - Whether to show ellipsis (level 4+ hierarchy)
+    - `siblingPos` - Position among siblings (1-based)
+    - `siblingCnt` - Total sibling count
+  - **Lines 103-128**: `setupCloudKitSubscription()` - **CRITICAL**:
+    - Creates CKQuerySubscription for CurrentTaskPointer records (line 107)
+    - Registers NotificationCenter observer for "CloudKitTaskUpdated" (line 116)
+    - When notification received → Triggers `fetchCurrentTask()` (line 124)
     - **Note**: Subscribes to pointer updates (not Task saves) to eliminate race condition
-- **State Management**:
-  - `@State private var currentTask: String` - The displayed task text
+- **State Management** (lines 13-19):
+  - `@State private var rootTask: String?` - Root task text for hierarchy display
+  - `@State private var parentTask: String?` - Parent task text for hierarchy display
+  - `@State private var currentTask: String?` - Current task text (main display)
+  - `@State private var showEllipsis: Bool` - Whether to show ellipsis between root and parent
+  - `@State private var siblingPosition: Int?` - Current task's position among siblings
+  - `@State private var siblingTotal: Int?` - Total number of siblings
   - `@State private var isLoading: Bool` - Loading indicator state
+- **HierarchyView_MaxContrast** (lines 131-220):
+  - Displays adaptive hierarchy based on task depth (1-4 levels)
+  - SF Pro Rounded typography with varying sizes: root (15pt), parent (20pt), current (40pt)
+  - Dynamic spacing - elements only take space when rendered
+  - Sibling indicator dots (○ ● ○ ○) showing position among siblings
+  - Opacity hierarchy: current (1.0), parent (0.75), root (0.55)
 
 ---
 
@@ -171,39 +250,74 @@
 - **Responsibility**: All CloudKit operations - save, fetch, subscribe
 - **Key Logic**:
 
-  **Initialization (Lines 8-13)**:
+  **Initialization (Lines 10-28)**:
   ```swift
   container = CKContainer.default()              // iCloud.com.vishaljain.HoldApp
   database = container.privateCloudDatabase      // Private database (user-isolated)
   ```
   - Uses default CloudKit container (configured in entitlements)
   - Uses **private database** (isolated per Apple ID, syncs across user's devices)
+  - Logs container ID and environment (production vs development)
 
-  **`saveTask()` (Lines 16-50)**:
+  **`saveTask()` (Lines 31-74)**:
   - Creates `CKRecord(recordType: "Task")`
-  - Sets fields: `text`, `timestamp`, `isCompleted`, **`isCurrent`** (boolean), **`parent_id`** (optional)
-  - Supports parent/child task relationships via parent_id parameter
+  - Sets fields: `text`, `timestamp`, `isCompleted`, **`isCurrent`** (boolean), **`parent_id`** (optional), **`root_id`** (optional)
+  - Supports hierarchical task relationships via parent_id and root_id parameters
   - `isCurrent` field kept for backward compatibility (deprecated, use pointer instead)
   - Saves to database
   - **Called from**: Mac AppDelegate task creation handlers
-  - **Logs**: Save duration, record ID, parent relationship, current task status
+  - **Logs**: Save duration, record ID, parent relationship, root relationship, current task status
 
-  **`fetchCurrentTask()` (Lines 52-78)**:
+  **`fetchTaskById()` (Lines 77-98)**:
+  - Fetches specific task record by CloudKit record ID
+  - Used by Mac for fetching parent/root task texts
+  - Returns CKRecord with all task fields
+  - **Called from**: Mac AppDelegate task creation handlers (for building hierarchy display metadata)
+  - **Logs**: Fetch duration, task text, parent_id, root_id
+
+  **`fetchCurrentTask()` (Lines 102-168)**:
   - **Fetches by hardcoded ID**: `CKRecord.ID(recordName: "CURRENT_TASK_POINTER")`
   - **No query, no index lag** - direct database fetch
-  - Extracts `currentTaskText` field from pointer record
-  - Returns `nil` if pointer doesn't exist (no current task set)
+  - Extracts **9 fields** from pointer record:
+    - `taskId` - Current task's CloudKit record ID
+    - `text` - Current task text
+    - `parentId` - Parent task's CloudKit record ID
+    - `rootId` - Root task's CloudKit record ID
+    - `parentTaskText` - Parent task text (for hierarchy display)
+    - `rootTaskText` - Root task text (for hierarchy display)
+    - `showEllipsis` - Boolean indicating level 4+ hierarchy (stored as Int: 1=true, 0=false)
+    - `siblingPosition` - 1-based position among siblings
+    - `siblingCount` - Total number of siblings (including current)
+  - Returns tuple with all 9 fields
+  - Returns `nil` values if pointer doesn't exist (no current task set)
   - **Called from**: iPhone ContentView on app launch and notification
-  - **Logs**: Fetch duration, task text, "Fetched from pointer (instant, no index lag)"
+  - **Logs**: Fetch duration, all extracted fields, "Fetched from pointer (instant, no index lag)"
 
-  **`updateCurrentTaskPointer()` (Lines 80-132)**:
+  **`updateCurrentTaskPointer()` (Lines 171-253)**:
   - Fetches or creates singleton pointer record with ID "CURRENT_TASK_POINTER"
-  - Updates `currentTaskText` and `timestamp` fields
-  - **Called from**: Mac AppDelegate when task becomes current (Ctrl+Enter, Shift+Enter, Cmd+Ctrl+Enter)
-  - **Logs**: Pointer update/creation duration, task text
-  - **Purpose**: Enable instant iPhone sync without query index lag
+  - Updates **ALL 10 fields**:
+    - `currentTaskId` - Current task's record ID
+    - `currentTaskText` - Current task text
+    - `parentId` - Parent task's record ID
+    - `rootId` - Root task's record ID
+    - `parentTaskText` - Parent task text
+    - `rootTaskText` - Root task text
+    - `showEllipsis` - 1 if level 4+, 0 otherwise
+    - `siblingPosition` - Position among siblings
+    - `siblingCount` - Total sibling count
+    - `timestamp` - Update time
+  - **Called from**: Mac AppDelegate when task becomes current (Ctrl+Enter, Shift+Enter, Cmd+Ctrl+Enter) AND sibling selection
+  - **Logs**: Pointer update/creation duration, all fields, "Pointer Summary"
+  - **Purpose**: Enable instant iPhone sync without query index lag, provide complete display info in one fetch
 
-  **`subscribeToTaskChanges()` (Lines 149-181)**:
+  **`fetchSiblings()` (Lines 256-285)**:
+  - Queries CloudKit for all tasks with matching `parent_id`
+  - Sorts by timestamp (ascending) for stable ordering
+  - Returns array of tuples: `(id: String, text: String, timestamp: Date)`
+  - **Called from**: Mac AppDelegate during task creation (to calculate siblingPosition/siblingCount) and sibling selection UI
+  - **Logs**: Fetch duration, sibling count
+
+  **`subscribeToTaskChanges()` (Lines 288-319)**:
   - Creates `CKQuerySubscription` for "CurrentTaskPointer" records (not Task records!)
   - Options: `.firesOnRecordCreation`, `.firesOnRecordUpdate`
   - Notification: `shouldSendContentAvailable = true` (silent push)
@@ -244,6 +358,7 @@ User Input                    Mac App                    CloudKit
 CloudKit Server              APNs                      iPhone App
 ─────────────────────────────────────────────────────────────────
 1. Pointer updated       →  Check subscriptions
+   (ALL 10 fields)
 2. Find subscription ID  →  "55C508DF-..."
 3. Get device token      →  "d87224f72212ec54..."
 4. Send push             →  APNs servers          →  iPhone receives
@@ -251,11 +366,320 @@ CloudKit Server              APNs                      iPhone App
 6. Post local notif      →                        →  "CloudKitTaskUpdated"
 7. ContentView observes  →                        →  Triggers fetchCurrentTask()
 8. Fetch pointer by ID   →  Fetch pointer         ←  database.fetch(withRecordID:)
-9. Update UI             →                        →  Display "Buy groceries"
+   Extract 9 fields:
+   - taskId, text
+   - parentId, rootId
+   - parentTaskText, rootTaskText
+   - showEllipsis
+   - siblingPosition, siblingCount
+9. Update UI with:       →                        →  Display hierarchy:
+   - Root (if level 3+)                             "New parent"
+   - Ellipsis (if level 4+)                         "⋯"
+   - Parent (if level 2+)                           "New child 2"
+   - Current task                                   "New child 3" (40pt, bold)
+   - Sibling dots (if siblings)                     ○ ○ ● ○
 ```
 
 **Timing**: < 1 second after subscription activates (5-15 min activation on first registration)
 **Key**: Subscribes to CurrentTaskPointer (not Task) to eliminate race condition
+**Efficiency**: iPhone does ONE fetch, gets everything needed for display (no calculations, no additional fetches)
+
+### Hierarchy Display Metadata Calculation (Mac → CloudKit):
+
+**When creating/switching to a task, Mac calculates ALL display metadata before updating pointer:**
+
+```
+Task Creation Flow (e.g., Shift+Enter creates child)
+────────────────────────────────────────────────────
+1. Save Task record
+   - text: "New child 3"
+   - parent_id: "ABC123" (id of "New child 2")
+   - root_id: "XYZ789" (id of "New parent")
+
+2. Fetch Parent Task (parent_id = "ABC123")
+   - parent.text = "New child 2"
+   - parent.parent_id = "DEF456" (id of "New child")
+   - parent.root_id = "XYZ789"
+
+3. Fetch Root Task (root_id = "XYZ789")
+   - root.text = "New parent"
+
+4. Calculate showEllipsis
+   - Logic: parent.parent_id != nil && parent.parent_id != rootId
+   - parent.parent_id = "DEF456"
+   - rootId = "XYZ789"
+   - DEF456 != XYZ789 → showEllipsis = true (level 4+ hierarchy)
+
+5. Fetch Siblings (all tasks with parent_id = "ABC123")
+   - Query: WHERE parent_id == "ABC123" ORDER BY timestamp ASC
+   - Results: ["New child 3" (timestamp: 1), "Sibling 1" (timestamp: 2), "Sibling 2" (timestamp: 3)]
+   - siblingCount = 3
+   - Find current task in list → siblingPosition = 1 (first sibling)
+
+6. Update CurrentTaskPointer with ALL 10 fields
+   - currentTaskId: [new task ID]
+   - currentTaskText: "New child 3"
+   - parentId: "ABC123"
+   - rootId: "XYZ789"
+   - parentTaskText: "New child 2"
+   - rootTaskText: "New parent"
+   - showEllipsis: 1 (true)
+   - siblingPosition: 1
+   - siblingCount: 3
+   - timestamp: [now]
+
+7. Push notification triggers → iPhone fetches pointer → Displays immediately
+```
+
+**Ellipsis Calculation Logic:**
+- **Level 1 (root)**: No ellipsis (no parent)
+- **Level 2 (child of root)**: No ellipsis (only 2 levels)
+- **Level 3 (grandchild)**: No ellipsis (root → parent → current fits in 3 rows)
+- **Level 4+ (great-grandchild+)**: Show ellipsis (root → ... → parent → current)
+  - Condition: `parent.parent_id != nil && parent.parent_id != rootId`
+  - If parent's parent exists AND isn't the root → we're skipping levels → show ellipsis
+
+**Sibling Position Calculation:**
+- Fetch all siblings (tasks with same parent_id)
+- Sort by timestamp (ascending) for stable ordering
+- Find current task in sorted list → position = index + 1 (1-based)
+- Count = total siblings in list
+
+**Optimization: DispatchGroup for Parallel Fetches**
+- Parent fetch, root fetch, sibling fetch run in parallel (not sequential)
+- All must complete before pointer update
+- Reduces total sync time from 3 sequential fetches to 1 parallel batch
+
+---
+
+## Sibling Tracking System
+
+The sibling tracking system allows users to navigate between tasks that share the same parent, with real-time iPhone display updates showing sibling position and count.
+
+### Overview
+
+**Key Components:**
+- `HoldApp/SiblingTableView.swift` - Custom NSTableView subclass for keyboard event handling
+- `HoldApp/SiblingSelectorViewController.swift` - Sibling list UI controller
+- `HoldApp/SiblingSelectorPanel.swift` - Floating panel for sibling selection
+- `HoldApp/HotkeyManager.swift` - Cmd+Shift+S hotkey registration
+- `HoldApp/AppDelegate.swift` - Unified pointer update logic (lines 281-402, 467-586)
+- `HoldApp/CloudKitManager.swift` - `fetchSiblings()` method (lines 256-285)
+
+**CloudKit Schema Fields (CurrentTaskPointer):**
+- `siblingPosition` (Int) - Current task's position among siblings (1-based)
+- `siblingCount` (Int) - Total number of siblings (including current task)
+
+### Three Sibling Operations
+
+#### 1. Create Sibling Without Switch (Cmd+Enter)
+
+**Flow:**
+```
+User: Cmd+Enter on "Buy groceries"
+├─ Current task: "Clean room" (sibling #2/3 under "Home tasks")
+├─ Creates: "Buy groceries" (becomes sibling #4)
+├─ Keeps current: "Clean room"
+└─ iPhone updates: Shows 4 dots instead of 3 (position stays at #2)
+```
+
+**Code Path (AppDelegate.swift:281-402):**
+1. **Determine display task** (lines 282-304):
+   ```swift
+   if switchTo {
+       displayTaskId = newSiblingId  // Not taken
+   } else {
+       displayTaskId = currentTask.id  // Keep current task
+   }
+   ```
+
+2. **Unified pointer update** (lines 306-402):
+   - Fetch parent text
+   - Fetch root text
+   - **Fetch siblings** (line 356): Query returns ALL tasks with same parent_id
+   - Calculate count: `siblings.count + 1` (accounts for index lag - new sibling just saved)
+   - Calculate position: Find current task in siblings array → `index + 1`
+   - Update pointer → CloudKit subscription fires → iPhone refreshes
+
+**Key Insight:** Database query automatically includes newly created sibling, so count increments naturally without manual calculation.
+
+#### 2. Create Sibling With Switch (Cmd+Ctrl+Enter)
+
+**Flow:**
+```
+User: Cmd+Ctrl+Enter on "Call dentist"
+├─ Current task: "Clean room" (sibling #2/3 under "Home tasks")
+├─ Creates: "Call dentist" (becomes sibling #4)
+├─ Switches to: "Call dentist"
+└─ iPhone updates: Shows "Call dentist" at position 4/4
+```
+
+**Code Path:** Same as Operation #1, but:
+- Line 289: `displayTaskId = newSiblingId` (switch to new task)
+- Line 362-364: New sibling position = `siblingCount` (goes last by timestamp)
+
+#### 3. Select Sibling from Panel (Cmd+Shift+S)
+
+**Flow:**
+```
+User: Cmd+Shift+S
+├─ Panel shows: All siblings sorted by timestamp
+├─ User navigates: Arrow keys or mouse
+├─ User selects: Enter or double-click
+└─ iPhone updates: Switches to selected sibling with correct position
+```
+
+**UI Components:**
+
+**SiblingTableView.swift** - Custom NSTableView subclass
+- **Problem Solved:** NSTableView intercepts keyboard events internally, never calling view controller's `keyDown()`
+- **Solution:** Subclass NSTableView, override `keyDown()`, forward to delegate
+- **Lines 20-34:** Keyboard event handling
+  ```swift
+  override func keyDown(with event: NSEvent) {
+      if event.keyCode == 53 { // Escape
+          keyboardDelegate?.siblingTableViewDidPressEscape(self)
+      } else if event.keyCode == 36 { // Enter
+          keyboardDelegate?.siblingTableViewDidPressEnter(self)
+      } else {
+          super.keyDown(with: event)  // Let NSTableView handle arrows
+      }
+  }
+  ```
+- **Arrow keys:** NSTableView's default behavior (row selection) used naturally
+- **Enter/Escape:** Forwarded to view controller via `SiblingTableViewDelegate`
+
+**SiblingSelectorViewController.swift**
+- **Lines 92-97:** Enter key handler → triggers `onSiblingSelected` callback
+- **Lines 100-102:** Escape key handler → triggers `onCancel` callback
+- **Lines 92-97:** Double-click handler → same as Enter (selects sibling)
+- **Lines 55:** Sets `keyboardDelegate = self` to receive keyboard events
+
+**SiblingSelectorPanel.swift**
+- **Line 16:** `styleMask: [.borderless, .fullSizeContentView]` (NO `.nonactivatingPanel`)
+- **Line 70:** `makeKey()` to receive keyboard focus
+- **Line 65:** `focusTableView()` to set table as first responder
+
+**Code Path (AppDelegate.swift:467-586):**
+1. **showSiblingSelector()** (lines 409-464):
+   - Fetch siblings from CloudKit
+   - Find current task's index in list
+   - Show panel with siblings + currentIndex
+
+2. **handleSiblingSelection()** (lines 467-586):
+   - Fetch selected task metadata (parentId, rootId)
+   - Update AppState to selected task
+   - Fetch parent/root/sibling display info
+   - Calculate position: Find task in siblings array
+   - Update pointer with all 9 fields
+   - Push notification → iPhone refreshes
+
+### Unified Pointer Update Architecture
+
+**Design Principle:** All three operations use the SAME update logic by determining the "display task" first, then fetching/calculating metadata for that task.
+
+**AppDelegate.swift:281-402** (Sibling Creation Flow):
+```swift
+// Step 1: Determine which task to display
+if switchTo {
+    displayTask = newSibling
+} else {
+    displayTask = currentTask
+}
+
+// Step 2: Unified update (same code for both paths)
+fetchSiblings(parent) {
+    count = siblings.count + 1  // Auto-includes new sibling from DB
+    position = find(displayTask, in: siblings)
+    updatePointer(displayTask, count, position)  // → Push notification
+}
+```
+
+**Why This Works:**
+- **No hardcoded increment logic** - Database is source of truth
+- **No special cases** - Both Cmd+Enter and Cmd+Ctrl+Enter use same flow
+- **Automatically correct** - Query includes newly saved sibling
+- **DRY principle** - Single update path, easier to maintain
+
+### CloudKit Sibling Query
+
+**CloudKitManager.swift:256-285** - `fetchSiblings(parentId:)`
+
+**Query Logic:**
+```swift
+let predicate = NSPredicate(format: "parent_id == %@", parentId)
+let query = CKQuery(recordType: "Task", predicate: predicate)
+query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+```
+
+**Returns:** Array of `(id: String, text: String, timestamp: Date)` tuples sorted by creation time
+
+**Why Timestamp Sorting:**
+- Stable ordering (new siblings always go last)
+- Position calculation: `firstIndex(where: { $0.id == taskId }) + 1`
+- Count calculation: `siblings.count` (or `siblings.count + 1` if accounting for just-created sibling)
+
+### Data Flow: Mac → CloudKit → iPhone
+
+**Complete Sibling Update Flow:**
+
+```
+Mac: User creates sibling with Cmd+Enter
+├─ 1. Save new Task record to CloudKit (with parent_id)
+├─ 2. Query siblings: fetchSiblings(parent_id)
+├─    └─ Returns: All tasks with same parent (includes new sibling)
+├─ 3. Calculate metadata:
+├─    - siblingCount = siblings.count + 1 (accounts for index lag)
+├─    - siblingPosition = findPosition(currentTask, in: siblings)
+├─ 4. Update CurrentTaskPointer with 9 fields:
+├─    - currentTaskId, currentTaskText
+├─    - parentId, rootId
+├─    - parentTaskText, rootTaskText
+├─    - showEllipsis
+├─    - siblingPosition ← Updated
+├─    - siblingCount ← Updated
+└─ 5. CloudKit subscription fires
+
+CloudKit: Detects pointer update
+├─ Push notification sent to iPhone
+└─ Silent content-available notification
+
+iPhone: Receives notification
+├─ 1. Fetch CurrentTaskPointer (1 read, instant)
+├─ 2. Extract 9 fields from pointer
+├─ 3. Update UI state variables:
+├─    - siblingPosition = pointer.siblingPosition
+├─    - siblingCount = pointer.siblingCount
+└─ 4. Render HierarchyView with updated dots
+```
+
+**Performance:**
+- Mac: 3 reads + 2 writes (parallel fetches via DispatchGroup)
+- iPhone: 1 read (no additional queries needed - all in pointer)
+- Total sync time: ~500-700ms (depending on network)
+
+### Edge Cases
+
+**Top-Level Task (No Parent):**
+- `siblingPosition = nil`
+- `siblingCount = nil`
+- No dots shown on iPhone
+
+**Single Child (No Siblings):**
+- `siblingPosition = 1`
+- `siblingCount = 1`
+- One dot shown (no sibling navigation needed)
+
+**Newly Created Sibling Not in Query Results (Index Lag):**
+- Query returns N siblings (new sibling hasn't indexed yet)
+- Count calculation: `siblings.count + 1 = N + 1` (correct)
+- Position calculation: New sibling goes last = N + 1 (correct)
+- **Solution:** Always add +1 to account for just-saved sibling
+
+**Sibling Selector: Current Task Missing from Results:**
+- Line 542-544 (AppDelegate.swift): Add current task to array if missing
+- Ensures user can always see their current task in list
+- Position still calculated correctly from final array
 
 ### User Isolation (Multi-User):
 
@@ -585,11 +1009,19 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 
 ### Record Type: "CurrentTaskPointer"
 
-**Purpose**: Singleton record that points to the current task, enabling instant fetch without query index lag.
+**Purpose**: Singleton record that points to the current task, enabling instant fetch without query index lag. Contains ALL display metadata (hierarchy context, sibling info) so iPhone only needs ONE fetch.
 
 | Field Name        | Type      | Description                                    |
 |-------------------|-----------|------------------------------------------------|
+| `currentTaskId`   | String    | CloudKit record ID of the current task         |
 | `currentTaskText` | String    | Text of the currently active task              |
+| `parentId`        | String?   | CloudKit record ID of parent task (nil if top-level) |
+| `rootId`          | String?   | CloudKit record ID of root task (nil if level 1-2) |
+| `parentTaskText`  | String?   | Text of parent task for hierarchy display      |
+| `rootTaskText`    | String?   | Text of root task for hierarchy display        |
+| `showEllipsis`    | Int       | 1 if ellipsis needed (level 4+), 0 otherwise (stored as Int, not Bool) |
+| `siblingPosition` | Int?      | Position among siblings (1-based index)        |
+| `siblingCount`    | Int?      | Total number of siblings (including current)   |
 | `timestamp`       | Date/Time | When this pointer was last updated             |
 
 **Record ID**: **Hardcoded to "CURRENT_TASK_POINTER"** (both macOS and iPhone know this ID)
@@ -597,15 +1029,17 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 **Current Task Synchronization Flow**:
 1. **macOS creates task with Ctrl+Enter/Shift+Enter/Cmd+Ctrl+Enter**
 2. **macOS saves Task record** with `isCurrent = true` (backward compatibility)
-3. **macOS calls `updateCurrentTaskPointer(text)`**:
+3. **macOS calls `updateCurrentTaskPointer(taskId, text, parentId, rootId, parentTaskText, rootTaskText, showEllipsis, siblingPosition, siblingCount)`**:
    - Fetches record by ID "CURRENT_TASK_POINTER" (not a query!)
-   - If exists: updates `currentTaskText` field
+   - If exists: updates ALL 10 fields
    - If not exists: creates new record with this hardcoded ID
+   - **Mac calculates everything**: Fetches parent/root texts, calculates ellipsis, queries siblings
 4. **CloudKit subscription fires** → notification sent to iPhone
 5. **iPhone calls `fetchCurrentTask()`**:
    - Fetches by ID "CURRENT_TASK_POINTER" (bypasses query index - instant!)
-   - Extracts `currentTaskText` and displays
-6. **Result**: < 1 second sync, no index lag
+   - Extracts ALL 9 fields (taskId, text, parentId, rootId, parentTaskText, rootTaskText, showEllipsis, siblingPosition, siblingCount)
+   - **iPhone just reads**: No additional fetches, no calculations needed
+6. **Result**: < 1 second sync, no index lag, complete display info in one fetch
 
 **Why This Works**:
 - ✅ **No query** - fetch by ID goes directly to database
@@ -771,6 +1205,19 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 **Trigger**: Called from iPhone ContentView
 **Action**: Queries CloudKit for latest incomplete task, updates UI state
 
+### 8. Sibling Selection (Mac)
+**File**: `HoldApp/AppDelegate.swift`
+**Lines**: 386-561
+**Trigger**: User presses Cmd+Shift+S
+**Action**:
+1. Validates current task exists and has parent
+2. Fetches siblings via `CloudKitManager.shared.fetchSiblings(parentId:)`
+3. Displays `SiblingSelectorPanel` with sibling list
+4. User navigates with arrow keys and selects with Enter
+5. Fetches selected task's full metadata
+6. Updates `CurrentTaskPointer` with all display info (parent/root texts, ellipsis, sibling position)
+7. Updates AppState and shows success toast
+
 
 
 ---
@@ -857,14 +1304,16 @@ Do NOT allow:
 ```
 HoldApp/
 ├── HoldApp/                          # Mac App Target
-│   ├── AppDelegate.swift             # Mac app lifecycle, task capture coordinator
-│   ├── HotkeyManager.swift           # Global keyboard shortcut (Cmd+Shift+Space)
+│   ├── AppDelegate.swift             # Mac app lifecycle, task capture, sibling selection coordinator
+│   ├── HotkeyManager.swift           # Global keyboard shortcuts (Cmd+Shift+Space, Cmd+Shift+S)
 │   ├── SpotlightViewController.swift # Capture bar UI (text field)
-│   ├── SpotlightPanel.swift          # Floating window container
-│   ├── SubmitTextField.swift         # 🆕 Custom NSTextField for modifier key detection
-│   ├── TaskInputUI.swift             # 🆕 Protocol for task input interface
-│   ├── AppState.swift                # 🆕 Global state (current task tracking)
-│   ├── ToastManager.swift            # 🆕 Temporary notification messages
+│   ├── SpotlightPanel.swift          # Floating window container for Spotlight
+│   ├── SiblingSelectorViewController.swift # 🆕 Sibling task list UI (Cmd+Shift+S)
+│   ├── SiblingSelectorPanel.swift    # 🆕 Floating window container for sibling selector
+│   ├── SubmitTextField.swift         # Custom NSTextField for modifier key detection
+│   ├── TaskInputUI.swift             # Protocol for task input interface
+│   ├── AppState.swift                # Global state (current task tracking)
+│   ├── ToastManager.swift            # Temporary notification messages
 │   ├── LogManager.swift              # ✅ FIXED - Logs to Application Support directory
 │   ├── CloudKitManager.swift         # ✅ SHARED - All CloudKit operations
 │   ├── Assets.xcassets/
@@ -926,5 +1375,5 @@ HoldApp/
 
 **Document Location**: `/Users/vishaljain/xcode_projects/HoldApp/.claude/SYSTEM_ARCHITECTURE.md`
 
-**Last Updated**: 2025-11-09
-**Version**: 1.1 (Fixed CloudKit subscription race condition)
+**Last Updated**: 2025-11-13
+**Version**: 1.3 (Updated CloudKit schema documentation - expanded CurrentTaskPointer to 10 fields, documented hierarchy display metadata calculation, updated ContentView/CloudKitManager/AppDelegate documentation to reflect Phase 1-6 implementation)

@@ -98,8 +98,18 @@ class CloudKitManager {
     }
 
     // Fetch the current task from pointer record (bypasses query index lag)
-    // Returns: (taskId, text, parentId, rootId)
-    func fetchCurrentTask(completion: @escaping (Result<(taskId: String?, text: String?, parentId: String?, rootId: String?), Error>) -> Void) {
+    // Returns all display info: task texts, hierarchy info, sibling info
+    func fetchCurrentTask(completion: @escaping (Result<(
+        taskId: String?,
+        text: String?,
+        parentId: String?,
+        rootId: String?,
+        parentTaskText: String?,
+        rootTaskText: String?,
+        showEllipsis: Bool,
+        siblingPosition: Int?,
+        siblingCount: Int?
+    ), Error>) -> Void) {
         let fetchStartTime = Date()
         print("⏱️ [CloudKit] Starting fetch for current task at \(fetchStartTime)")
 
@@ -114,15 +124,41 @@ class CloudKitManager {
                 let text = record["currentTaskText"] as? String
                 let parentId = record["parentId"] as? String
                 let rootId = record["rootId"] as? String
+                let parentTaskText = record["parentTaskText"] as? String
+                let rootTaskText = record["rootTaskText"] as? String
+                let showEllipsis = (record["showEllipsis"] as? Int == 1) // CloudKit stores Bool as Int
+                let siblingPosition = record["siblingPosition"] as? Int
+                let siblingCount = record["siblingCount"] as? Int
 
                 print("✅ [CloudKit] Current task fetched in \(String(format: "%.2f", fetchTime))s")
                 print("📝 [CloudKit] Fetched from pointer (instant, no index lag)")
                 print("🔗 [Fetch Summary] text=\"\(text ?? "nil")\" | taskId=\(taskId ?? "nil") | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
-                completion(.success((taskId: taskId, text: text, parentId: parentId, rootId: rootId)))
+                print("📊 [Sibling Info] position=\(siblingPosition?.description ?? "nil")/\(siblingCount?.description ?? "nil") | ellipsis=\(showEllipsis)")
+                completion(.success((
+                    taskId: taskId,
+                    text: text,
+                    parentId: parentId,
+                    rootId: rootId,
+                    parentTaskText: parentTaskText,
+                    rootTaskText: rootTaskText,
+                    showEllipsis: showEllipsis,
+                    siblingPosition: siblingPosition,
+                    siblingCount: siblingCount
+                )))
             } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
                 // Pointer doesn't exist yet (no current task set)
                 print("ℹ️ [CloudKit] Fetch completed in \(String(format: "%.2f", fetchTime))s: No current task pointer found")
-                completion(.success((taskId: nil, text: nil, parentId: nil, rootId: nil)))
+                completion(.success((
+                    taskId: nil,
+                    text: nil,
+                    parentId: nil,
+                    rootId: nil,
+                    parentTaskText: nil,
+                    rootTaskText: nil,
+                    showEllipsis: false,
+                    siblingPosition: nil,
+                    siblingCount: nil
+                )))
             } else {
                 // Unexpected error
                 print("❌ [CloudKit] Fetch failed after \(String(format: "%.2f", fetchTime))s: \(error?.localizedDescription ?? "unknown")")
@@ -132,10 +168,22 @@ class CloudKitManager {
     }
 
     // Update the current task pointer record (bypasses query index lag)
-    func updateCurrentTaskPointer(taskId: String, text: String, parentId: String?, rootId: String?, completion: @escaping (Error?) -> Void) {
+    func updateCurrentTaskPointer(
+        taskId: String,
+        text: String,
+        parentId: String?,
+        rootId: String?,
+        parentTaskText: String?,
+        rootTaskText: String?,
+        showEllipsis: Bool,
+        siblingPosition: Int?,
+        siblingCount: Int?,
+        completion: @escaping (Error?) -> Void
+    ) {
         let pointerStartTime = Date()
         print("🎯 [CloudKit] Updating current task pointer at \(pointerStartTime)")
         print("🔗 [Pointer Update] taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
+        print("📊 [Sibling Update] position=\(siblingPosition?.description ?? "nil")/\(siblingCount?.description ?? "nil") | ellipsis=\(showEllipsis)")
 
         // Use hardcoded record ID so both macOS and iPhone know where to look
         let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
@@ -151,6 +199,11 @@ class CloudKitManager {
                 existingRecord["currentTaskText"] = text as CKRecordValue
                 existingRecord["parentId"] = parentId as CKRecordValue?
                 existingRecord["rootId"] = rootId as CKRecordValue?
+                existingRecord["parentTaskText"] = parentTaskText as CKRecordValue?
+                existingRecord["rootTaskText"] = rootTaskText as CKRecordValue?
+                existingRecord["showEllipsis"] = (showEllipsis ? 1 : 0) as CKRecordValue
+                existingRecord["siblingPosition"] = siblingPosition as CKRecordValue?
+                existingRecord["siblingCount"] = siblingCount as CKRecordValue?
                 existingRecord["timestamp"] = Date() as CKRecordValue
 
                 self.database.save(existingRecord) { savedRecord, saveError in
@@ -172,6 +225,11 @@ class CloudKitManager {
                 newRecord["currentTaskText"] = text as CKRecordValue
                 newRecord["parentId"] = parentId as CKRecordValue?
                 newRecord["rootId"] = rootId as CKRecordValue?
+                newRecord["parentTaskText"] = parentTaskText as CKRecordValue?
+                newRecord["rootTaskText"] = rootTaskText as CKRecordValue?
+                newRecord["showEllipsis"] = (showEllipsis ? 1 : 0) as CKRecordValue
+                newRecord["siblingPosition"] = siblingPosition as CKRecordValue?
+                newRecord["siblingCount"] = siblingCount as CKRecordValue?
                 newRecord["timestamp"] = Date() as CKRecordValue
 
                 self.database.save(newRecord) { savedRecord, saveError in
@@ -190,6 +248,38 @@ class CloudKitManager {
                 let pointerTime = Date().timeIntervalSince(pointerStartTime)
                 print("❌ [CloudKit] Pointer fetch error after \(String(format: "%.2f", pointerTime))s: \(error?.localizedDescription ?? "unknown")")
                 completion(error)
+            }
+        }
+    }
+
+    // Fetch all siblings of a given parent (for sibling selection UI)
+    func fetchSiblings(parentId: String, completion: @escaping (Result<[(id: String, text: String, timestamp: Date)], Error>) -> Void) {
+        let fetchStartTime = Date()
+        print("👥 [CloudKit] Fetching siblings with parentId: \(parentId)")
+
+        // Query for all tasks with matching parent_id
+        let predicate = NSPredicate(format: "parent_id == %@", parentId)
+        let query = CKQuery(recordType: "Task", predicate: predicate)
+
+        // Sort by creation time for stable ordering
+        query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: true)]
+
+        database.perform(query, inZoneWith: nil) { records, error in
+            let fetchTime = Date().timeIntervalSince(fetchStartTime)
+
+            if let error = error {
+                print("❌ [CloudKit] Sibling fetch failed after \(String(format: "%.2f", fetchTime))s: \(error.localizedDescription)")
+                completion(.failure(error))
+            } else if let records = records {
+                let siblings = records.compactMap { record -> (id: String, text: String, timestamp: Date)? in
+                    guard let text = record["text"] as? String,
+                          let timestamp = record["timestamp"] as? Date else {
+                        return nil
+                    }
+                    return (id: record.recordID.recordName, text: text, timestamp: timestamp)
+                }
+                print("✅ [CloudKit] Fetched \(siblings.count) siblings in \(String(format: "%.2f", fetchTime))s")
+                completion(.success(siblings))
             }
         }
     }

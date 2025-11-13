@@ -13,7 +13,7 @@ class SiblingSelectorPanel: NSPanel {
     init() {
         super.init(
             contentRect: NSRect(x: 0, y: 0, width: 500, height: 300),
-            styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
+            styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
@@ -44,8 +44,31 @@ class SiblingSelectorPanel: NSPanel {
         return false
     }
 
+    override func cancelOperation(_ sender: Any?) {
+        // NSPanel intercepts Escape key and calls this instead of keyDown
+        print("🎯 [Panel] cancelOperation called - Escape intercepted!")
+        hide()
+    }
+
+    override func keyDown(with event: NSEvent) {
+        print("🎯 [Panel] keyDown - keyCode: \(event.keyCode)")
+        super.keyDown(with: event)
+    }
+
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        print("🎯 [Panel] performKeyEquivalent - keyCode: \(event.keyCode)")
+        if event.keyCode == 53 {
+            print("🎯 [Panel] Escape caught in performKeyEquivalent!")
+            hide()
+            return true
+        }
+        return super.performKeyEquivalent(with: event)
+    }
+
     /// Show the panel with sibling list
     func show(siblings: [(id: String, text: String)], currentIndex: Int) {
+        print("🎯 [Panel.show] Called with \(siblings.count) siblings, currentIndex: \(currentIndex)")
+
         // Adjust height based on sibling count
         let rowHeight: CGFloat = 36  // 32px row + 4px spacing
         let minHeight: CGFloat = 100
@@ -60,18 +83,40 @@ class SiblingSelectorPanel: NSPanel {
         self.center()
 
         // Update view controller with siblings
+        print("🎯 [Panel.show] contentViewController: \(self.contentViewController != nil ? "exists" : "nil")")
         if let viewController = self.contentViewController as? SiblingSelectorViewController {
+            print("🎯 [Panel.show] Casting to SiblingSelectorViewController succeeded")
             viewController.updateSiblings(siblings, currentIndex: currentIndex)
-            viewController.focusTableView()
+        } else {
+            print("❌ [Panel.show] contentViewController is nil or wrong type!")
         }
 
         // Show panel
+        print("🎯 [Panel.show] Activating app and showing panel...")
+        NSApp.activate(ignoringOtherApps: true)  // Activate app so NSTableView receives keyboard events
         self.orderFrontRegardless()
         self.makeKey()
+
+        print("🎯 [Panel.show] isKeyWindow (immediate): \(self.isKeyWindow), canBecomeKey: \(self.canBecomeKey)")
+
+        // Delay focus until next run loop - makeKey() is asynchronous
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            print("🎯 [Panel.show] isKeyWindow (async): \(self.isKeyWindow)")
+
+            // Make table view first responder after panel becomes key
+            if let viewController = self.contentViewController as? SiblingSelectorViewController {
+                print("🎯 [Panel.show] Calling focusTableView() in async block...")
+                viewController.focusTableView()
+            } else {
+                print("❌ [Panel.show] Can't call focusTableView - no view controller!")
+            }
+        }
     }
 
     /// Hide the panel
     func hide() {
+        print("🎯 [Panel.hide] Hiding panel")
         self.orderOut(nil)
     }
 }

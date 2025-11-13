@@ -172,55 +172,6 @@ The iPhone is where passive awareness lives: one task, readable from across the 
 
 Inspired by minimalist tech like Remarkable, TRMNL, and Light Phone, combined with Apple's design language for a native, polished experience.
 
----
-
-## User Experience
-
-### Basic Flow
-
-1. **Working on Mac** → Think "I should focus on X" → Hit `Cmd+Shift+Space` → Type task → Press `Enter`
-2. **iPhone charging horizontally nearby** → Widget shows "Currently: Writing proposal"
-3. **Glance at widget** → Reminded of focus without breaking flow → Return to work
-4. **Work evolves** → Hit hotkey → Type new task → 2 seconds → Both devices update
-
-### Real ADHD Workflow
-
-1. Working on "Create embeddings script" (displayed on both Mac menu bar and iPhone)
-2. Hit a wall, need to debug environment
-3. `Cmd+Shift+Space` → "Debug environment setup" → `Shift+Enter` (creates child, switches to it)
-4. Both devices now show "Debug environment setup"
-5. While debugging, realize you need to check Stack Overflow
-6. `Cmd+Shift+Space` → "Review async error handling patterns" → `Option+Enter`
-7. Both devices update instantly
-8. Complete that → `Cmd+Shift+Enter` → Auto-advances to next task
-9. Back to debugging, which leads back to original embedding work
-10. **Never lost context, never had to remember the chain, never opened your task manager**
-
-### Brain Dump Session (ADHD-Friendly)
-
-1. Hit `Cmd+Shift+Space` → "Fix React bug" → `Shift+Enter` (create child, switch to it)
-2. "Check colleague's work" → `Cmd+Option+Enter` (create sibling, switch to it)  
-3. "Update tests" → `Cmd+Option+Enter` (another sibling, switch)
-4. "Research animation library" → `Cmd+Enter` (create sibling, DON'T switch)
-
-**You've captured 4 tasks in seconds.** The system holds all of them, but you still only see one: "Research animation library."
-
-To navigate:
-- `Cmd+Shift+Right` → Next sibling
-- `Cmd+Shift+Left` → Previous sibling  
-- `Cmd+Shift+Up` → Parent task
-- `Cmd+Shift+Down` → First child
-
-**You trust they're captured. You focus on one at a time. The bottleneck is the feature.**
-
-### Quick Actions Anywhere
-
-- `Cmd+Shift+Enter` → Complete current task (auto-advance to next)
-- `Cmd+Shift+Backspace` → Dismiss current task (remove it)
-- `Cmd+Shift+Z` → Undo last action
-- `Cmd+Shift+Right/Left` → Navigate between siblings
-- `Cmd+Shift+Up/Down` → Navigate to parent/child
-
 **No setup. Minimal learning curve. No ongoing maintenance.**
 
 ---
@@ -260,25 +211,7 @@ Hold iPhone (Focus Display)
   [Current objective only - always live, always visible]
 ```
 
-### Example Workflow
-
-**Morning planning in your main system:**
-- Open Things/Todoist/your bullet journal
-- Review today's work: "Build user authentication feature"
-- Set that in Hold → Both devices now display it
-
-**During deep work:**
-- Realize you need to "Check JWT library docs" → `Cmd+Shift+Space` → Done in 2 seconds
-- Now both devices show "Check JWT library docs" while you read
-- Finish reading, need to "Install JWT package" → Update in Hold → Both update instantly
-- Complete installation → Return to "Build authentication"
-
-**Throughout the day:**
-- Random thought: "Email Sarah about deployment" → Quick capture in Hold
-- It's not part of your current focus, just captured as a sibling for later
-- Eventually process these into your main task manager, or mark complete and they fade
-
-**Hold doesn't care if you organize tasks. It just holds them until you're ready.**
+**Hold doesn't care if you organize tasks. It just holds them until you're done with them.**
 
 ---
 
@@ -347,39 +280,6 @@ The Mac holds your working memory—one task at a time.
 Together, they hold space in your mind for actual work.
 
 Hold is for people who are tired of managing tasks and just want help doing them.
-
----
-
-## Technical Implementation Notes
-
-### Mac Interface
-- **Spotlight-style capture** (`Cmd+Shift+Space`): Primary capture interface with modifier-based creation
-  - `Enter` - Create top-level task
-  - `Option+Enter` - Create and switch to it
-  - `Shift+Enter` - Create child of current
-  - `Cmd+Enter` - Create sibling of current
-  - `Cmd+Option+Enter` - Create sibling and switch
-  - `Cmd+P` - Select custom parent
-  
-- **Menu bar display**: Shows current task only (truncated if needed)
-- **Navigation shortcuts**: Move between tasks without seeing a list
-  - `Cmd+Shift+Right/Left` - Navigate siblings
-  - `Cmd+Shift+Up/Down` - Navigate parent/child
-  - `Cmd+Shift+Enter` - Complete and advance
-  - `Cmd+Shift+Backspace` - Dismiss current task
-
-### iPhone Interface
-- StandBy Mode widget
-- Displays current task with hierarchy context (root → parent → current)
-- Shows sibling indicator if current task has siblings (e.g., "2/3")
-- Updates automatically via CloudKit (2-5s lag acceptable)
-- No user interaction required
-
-### Data Model
-- Tasks stored with hierarchical relationships (parentId)
-- Current task pointer syncs across devices
-- Chronological queue for task ordering
-- Undo stack for last action
 
 ---
 

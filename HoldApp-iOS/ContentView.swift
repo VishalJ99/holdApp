@@ -14,6 +14,8 @@ struct ContentView: View {
     @State private var parentTask: String?
     @State private var currentTask: String?
     @State private var showEllipsis: Bool = false
+    @State private var siblingPosition: Int?
+    @State private var siblingTotal: Int?
     @State private var isLoading: Bool = true
 
     var body: some View {
@@ -33,7 +35,9 @@ struct ContentView: View {
                     rootTask: rootTask,
                     parentTask: parentTask,
                     currentTask: currentTask,
-                    showEllipsis: showEllipsis
+                    showEllipsis: showEllipsis,
+                    siblingPosition: siblingPosition,
+                    siblingTotal: siblingTotal
                 )
             }
         }
@@ -53,83 +57,42 @@ struct ContentView: View {
         let fetchRequestTime = Date()
         print("📲 [ContentView] Fetch requested at \(fetchRequestTime)")
 
-        // Step 1: Fetch pointer to get IDs
+        // Fetch pointer - contains ALL display info in one request
         CloudKitManager.shared.fetchCurrentTask { result in
             switch result {
             case .success(let taskData):
-                print("📲 [ContentView] Pointer fetched: taskId=\(taskData.taskId ?? "nil") | parentId=\(taskData.parentId ?? "nil") | rootId=\(taskData.rootId ?? "nil")")
+                let totalTime = Date().timeIntervalSince(fetchRequestTime)
 
-                // We already have current task text from pointer
+                // Extract all fields from pointer (no additional fetches needed!)
                 let currentText = taskData.text
-                let parentId = taskData.parentId
-                let rootId = taskData.rootId
+                let parentText = taskData.parentTaskText
+                let rootText = taskData.rootTaskText
+                let showEllipsis = taskData.showEllipsis
+                let siblingPos = taskData.siblingPosition
+                let siblingCnt = taskData.siblingCount
 
-                // Dispatch group to coordinate parallel fetches
-                let fetchGroup = DispatchGroup()
-                var fetchedParent: String?
-                var fetchedRoot: String?
-                var shouldShowEllipsis = false
-
-                // Step 2: Fetch parent task if parentId exists
-                if let parentId = parentId {
-                    fetchGroup.enter()
-                    print("🔍 [ContentView] Fetching parent task: \(parentId)")
-                    CloudKitManager.shared.fetchTaskById(parentId) { parentResult in
-                        switch parentResult {
-                        case .success(let parentRecord):
-                            fetchedParent = parentRecord["text"] as? String
-                            let parentOfParent = parentRecord["parent_id"] as? String
-
-                            // Check if we need ellipsis: parent is not a direct child of root
-                            if let parentOfParent = parentOfParent, let rootId = rootId, parentOfParent != rootId {
-                                shouldShowEllipsis = true
-                                print("🔹 [ContentView] Ellipsis needed: parent.parent_id(\(parentOfParent)) ≠ rootId(\(rootId))")
-                            }
-
-                            print("✅ [ContentView] Parent fetched: \(fetchedParent ?? "nil") | parent.parent_id: \(parentOfParent ?? "nil")")
-                        case .failure(let error):
-                            print("❌ [ContentView] Parent fetch failed: \(error.localizedDescription)")
-                        }
-                        fetchGroup.leave()
-                    }
-                }
-
-                // Step 3: Fetch root task if rootId exists AND is different from parentId
-                if let rootId = rootId, rootId != parentId {
-                    fetchGroup.enter()
-                    print("🔍 [ContentView] Fetching root task: \(rootId)")
-                    CloudKitManager.shared.fetchTaskById(rootId) { rootResult in
-                        switch rootResult {
-                        case .success(let rootRecord):
-                            fetchedRoot = rootRecord["text"] as? String
-                            print("✅ [ContentView] Root fetched: \(fetchedRoot ?? "nil")")
-                        case .failure(let error):
-                            print("❌ [ContentView] Root fetch failed: \(error.localizedDescription)")
-                        }
-                        fetchGroup.leave()
-                    }
-                }
-
-                // Step 4: Update UI when all fetches complete
-                fetchGroup.notify(queue: .main) {
-                    let totalTime = Date().timeIntervalSince(fetchRequestTime)
+                // Update UI on main thread
+                DispatchQueue.main.async {
                     self.isLoading = false
                     self.currentTask = currentText
-                    self.parentTask = fetchedParent
-                    self.rootTask = fetchedRoot
-                    self.showEllipsis = shouldShowEllipsis
+                    self.parentTask = parentText
+                    self.rootTask = rootText
+                    self.showEllipsis = showEllipsis
+                    self.siblingPosition = siblingPos
+                    self.siblingTotal = siblingCnt
 
                     print("✅ [ContentView] UI updated in \(String(format: "%.2f", totalTime))s")
                     print("📲 [ContentView] Hierarchy:")
-                    print("   Root: \(fetchedRoot ?? "nil")")
-                    print("   Ellipsis: \(shouldShowEllipsis ? "YES" : "NO")")
-                    print("   Parent: \(fetchedParent ?? "nil")")
+                    print("   Root: \(rootText ?? "nil")")
+                    print("   Ellipsis: \(showEllipsis ? "YES" : "NO")")
+                    print("   Parent: \(parentText ?? "nil")")
                     print("   Current: \(currentText ?? "nil")")
+                    print("📊 [ContentView] Siblings: \(siblingPos?.description ?? "nil")/\(siblingCnt?.description ?? "nil")")
                 }
 
             case .failure(let error):
+                let totalTime = Date().timeIntervalSince(fetchRequestTime)
                 DispatchQueue.main.async {
-                    let totalTime = Date().timeIntervalSince(fetchRequestTime)
                     self.isLoading = false
                     print("❌ [ContentView] Error fetching task after \(String(format: "%.2f", totalTime))s: \(error)")
                 }
@@ -170,60 +133,82 @@ struct HierarchyView_MaxContrast: View {
     let parentTask: String?
     let currentTask: String?
     let showEllipsis: Bool
+    let siblingPosition: Int?
+    let siblingTotal: Int?
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            VStack(spacing: 2) {
-                Spacer().frame(height: 20)
+            VStack(spacing: 0) {
+                Spacer().frame(height: 4)
 
                 // ROOT SECTION (only if level 3+)
                 if let root = rootTask {
                     Text(root)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.white.opacity(0.65))
+                        .font(.system(size: 15, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.55))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
                     // ELLIPSIS (only if level 4+)
                     if showEllipsis {
-                        Text("···")
-                            .font(.system(size: 14, weight: .bold))
-                            .foregroundColor(.white.opacity(0.60))
-                            .padding(.vertical, 2)
+                        Spacer().frame(height: 4)
+                        Text("⋯")
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundColor(.white.opacity(0.6))
+                        Spacer().frame(height: 0)
                     }
 
-                    // Arrow after root (only shown when root exists)
-                    Text("↓")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.70))
+                    Spacer().frame(height: showEllipsis ? 0 : 10)
 
-                    Spacer().frame(height: 4)
                 }
 
                 // PARENT SECTION (only if level 2+)
                 if let parent = parentTask {
                     Text(parent)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white.opacity(0.80))
+                        .font(.system(size: 20, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.75))
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    Spacer().frame(height: 12)
+                    Spacer().frame(height: 8)
+
+                    // Arrow after parent
+                    Text("↓")
+                        .font(.system(size: 18, weight: .regular, design: .rounded))
+                        .foregroundColor(.white.opacity(0.65))
+
+                    Spacer().frame(height: 4)
                 }
 
                 // CURRENT TASK (always shown if exists)
                 if let current = currentTask {
                     Text(current)
-                        .font(.system(size: 34, weight: .bold))
+                        .font(.system(size: 40, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
+                        .lineSpacing(2)
+                }
+
+                // SIBLING INDICATOR (only if has siblings)
+                if let position = siblingPosition,
+                   let total = siblingTotal,
+                   total > 1 {
+                    Spacer().frame(height: 18)
+
+                    HStack(spacing: 9) {
+                        ForEach(1...total, id: \.self) { index in
+                            Circle()
+                                .fill(index == position ? Color.white.opacity(0.8) : Color.white.opacity(0.3))
+                                .frame(width: 6, height: 6)
+                        }
+                    }
                 }
 
                 Spacer().frame(height: 90)
             }
-            .padding(.horizontal, 32)
+            .padding(.horizontal, 36)
         }
     }
 }

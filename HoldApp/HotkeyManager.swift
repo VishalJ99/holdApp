@@ -3,12 +3,10 @@ import Carbon
 
 class HotkeyManager {
     private var showHotKeyRef: EventHotKeyRef?
-    private var hideHotKeyRef: EventHotKeyRef?
     private var siblingSelectorHotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
 
     var onShowHotkey: (() -> Void)?
-    var onHideHotkey: (() -> Void)?
     var onSiblingSelector: (() -> Void)?
 
     deinit {
@@ -24,13 +22,8 @@ class HotkeyManager {
             hotkeyRef: &showHotKeyRef
         )
 
-        // Register Escape to hide
-        registerHotkey(
-            keyCode: UInt32(kVK_Escape),
-            modifiers: 0,
-            hotkeyId: 2,
-            hotkeyRef: &hideHotKeyRef
-        )
+        // NOTE: Escape is NOT registered globally - each panel handles it locally in keyDown()
+        // This allows Escape to work context-aware (dismiss spotlight OR sibling selector)
 
         // Register Command+Shift+S to show sibling selector
         registerHotkey(
@@ -51,11 +44,10 @@ class HotkeyManager {
 
             if hotkeyId.id == 1 {
                 manager.onShowHotkey?()
-            } else if hotkeyId.id == 2 {
-                manager.onHideHotkey?()
             } else if hotkeyId.id == 3 {
                 manager.onSiblingSelector?()
             }
+            // Note: hotkeyId 2 (Escape) removed - handled locally by panels
 
             return noErr
         }, 1, &eventType, Unmanaged.passUnretained(self).toOpaque(), &eventHandler)
@@ -70,10 +62,6 @@ class HotkeyManager {
         if let ref = showHotKeyRef {
             UnregisterEventHotKey(ref)
             showHotKeyRef = nil
-        }
-        if let ref = hideHotKeyRef {
-            UnregisterEventHotKey(ref)
-            hideHotKeyRef = nil
         }
         if let ref = siblingSelectorHotKeyRef {
             UnregisterEventHotKey(ref)

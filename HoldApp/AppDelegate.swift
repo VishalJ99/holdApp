@@ -55,9 +55,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.onShowHotkey = { [weak self] in
             self?.spotlightPanel.show()
         }
-        hotkeyManager.onHideHotkey = { [weak self] in
-            self?.spotlightPanel.hide()
-        }
+        // Note: Escape is handled locally by each panel's keyDown() method
         hotkeyManager.onSiblingSelector = { [weak self] in
             self?.showSiblingSelector()
         }

@@ -12,7 +12,7 @@ class SiblingSelectorViewController: NSViewController {
 
     // MARK: - Properties
 
-    private var tableView: NSTableView!
+    private var tableView: SiblingTableView!
     private var scrollView: NSScrollView!
     private var siblings: [(id: String, text: String)] = []
     private var currentIndex: Int = 0
@@ -41,18 +41,21 @@ class SiblingSelectorViewController: NSViewController {
         scrollView.borderType = .noBorder
         scrollView.backgroundColor = .clear
 
-        // Create table view
-        tableView = NSTableView(frame: scrollView.bounds)
+        // Create custom table view
+        tableView = SiblingTableView(frame: scrollView.bounds)
         tableView.backgroundColor = .clear
         tableView.gridStyleMask = []
         tableView.headerView = nil
         tableView.intercellSpacing = NSSize(width: 0, height: 4)
         tableView.rowHeight = 32
-        tableView.selectionHighlightStyle = .none
+        tableView.selectionHighlightStyle = .regular  // Changed from .none to enable selection
         tableView.allowsEmptySelection = false
         tableView.delegate = self
         tableView.dataSource = self
+        tableView.keyboardDelegate = self
         tableView.focusRingType = .none
+        tableView.target = self
+        tableView.doubleAction = #selector(handleDoubleClick)
 
         // Add single column
         let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("SiblingColumn"))
@@ -81,49 +84,49 @@ class SiblingSelectorViewController: NSViewController {
 
     /// Focus the table view for keyboard navigation
     func focusTableView() {
-        view.window?.makeFirstResponder(tableView)
+        let success = view.window?.makeFirstResponder(tableView)
+        print("🔍 focusTableView called - success: \(success ?? false)")
+        print("🔍 Current first responder: \(view.window?.firstResponder?.className ?? "nil")")
+        print("🔍 Table view acceptsFirstResponder: \(tableView.acceptsFirstResponder)")
     }
 
-    // MARK: - Keyboard Handling
-
     override func keyDown(with event: NSEvent) {
-        // Handle Escape key
-        if event.keyCode == 53 {
+        // Handle Escape key (same as Spotlight)
+        if event.keyCode == 53 { // Escape key
+            print("⎋ [ViewController] Escape pressed - calling onCancel")
             onCancel?()
             return
         }
-
-        // Handle Enter key
-        if event.keyCode == 36 {
-            let selectedRow = tableView.selectedRow
-            if selectedRow >= 0 && selectedRow < siblings.count {
-                let sibling = siblings[selectedRow]
-                onSiblingSelected?(sibling.id, sibling.text)
-            }
-            return
-        }
-
-        // Handle Arrow keys - Up
-        if event.keyCode == 126 {
-            let selectedRow = tableView.selectedRow
-            if selectedRow > 0 {
-                tableView.selectRowIndexes(IndexSet(integer: selectedRow - 1), byExtendingSelection: false)
-                tableView.scrollRowToVisible(selectedRow - 1)
-            }
-            return
-        }
-
-        // Handle Arrow keys - Down
-        if event.keyCode == 125 {
-            let selectedRow = tableView.selectedRow
-            if selectedRow < siblings.count - 1 {
-                tableView.selectRowIndexes(IndexSet(integer: selectedRow + 1), byExtendingSelection: false)
-                tableView.scrollRowToVisible(selectedRow + 1)
-            }
-            return
-        }
-
         super.keyDown(with: event)
+    }
+
+    // MARK: - Actions
+
+    @objc private func handleDoubleClick() {
+        let selectedRow = tableView.selectedRow
+        if selectedRow >= 0 && selectedRow < siblings.count {
+            let sibling = siblings[selectedRow]
+            onSiblingSelected?(sibling.id, sibling.text)
+        }
+    }
+}
+
+// MARK: - SiblingTableViewDelegate
+
+extension SiblingSelectorViewController: SiblingTableViewDelegate {
+    func siblingTableViewDidPressEnter(_ tableView: SiblingTableView) {
+        print("⏎ Enter pressed on row: \(tableView.selectedRow)")
+        let selectedRow = tableView.selectedRow
+        if selectedRow >= 0 && selectedRow < siblings.count {
+            let sibling = siblings[selectedRow]
+            print("⏎ Selecting sibling: \(sibling.text)")
+            onSiblingSelected?(sibling.id, sibling.text)
+        }
+    }
+
+    func siblingTableViewDidPressEscape(_ tableView: SiblingTableView) {
+        print("⎋ Escape pressed - calling onCancel")
+        onCancel?()
     }
 }
 
@@ -155,6 +158,7 @@ extension SiblingSelectorViewController: NSTableViewDelegate {
         label.textColor = isCurrent ? .white : NSColor.white.withAlphaComponent(0.7)
         label.lineBreakMode = .byTruncatingTail
         label.frame = NSRect(x: 20, y: 6, width: tableView.bounds.width - 40, height: 20)
+        label.refusesFirstResponder = true  // Prevent label from stealing keyboard focus from table view
 
         cellView.addSubview(label)
 
@@ -162,6 +166,15 @@ extension SiblingSelectorViewController: NSTableViewDelegate {
     }
 
     func tableView(_ tableView: NSTableView, shouldSelectRow row: Int) -> Bool {
+        print("🔵 shouldSelectRow called - row: \(row)")
         return true
+    }
+
+    func tableViewSelectionDidChange(_ notification: Notification) {
+        let selectedRow = tableView.selectedRow
+        print("🔵 Selection changed to row: \(selectedRow)")
+        if selectedRow >= 0 && selectedRow < siblings.count {
+            print("🔵 Selected sibling: \(siblings[selectedRow].text)")
+        }
     }
 }
