@@ -14,6 +14,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var spotlightViewController: SpotlightViewController!
     private var siblingSelectorPanel: SiblingSelectorPanel!
     private var siblingSelectorViewController: SiblingSelectorViewController!
+    private var rootSelectorPanel: RootSelectorPanel!
+    private var rootSelectorViewController: RootSelectorViewController!
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
 
@@ -50,6 +52,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.siblingSelectorPanel.hide()
         }
 
+        // Create Root Selector UI
+        rootSelectorViewController = RootSelectorViewController()
+        rootSelectorPanel = RootSelectorPanel()
+        rootSelectorPanel.contentViewController = rootSelectorViewController
+
+        // Setup root selector callbacks
+        rootSelectorViewController.onRootSelected = { [weak self] rootId, rootText in
+            self?.handleRootSelection(rootId: rootId, rootText: rootText)
+        }
+
+        rootSelectorViewController.onCancel = { [weak self] in
+            self?.rootSelectorPanel.hide()
+        }
+
         // Setup hotkeys
         hotkeyManager = HotkeyManager()
         hotkeyManager.onShowHotkey = { [weak self] in
@@ -58,6 +74,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Note: Escape is handled locally by each panel's keyDown() method
         hotkeyManager.onSiblingSelector = { [weak self] in
             self?.showSiblingSelector()
+        }
+        hotkeyManager.onRootSelector = { [weak self] in
+            self?.showRootSelector()
         }
         hotkeyManager.registerHotkeys()
     }
@@ -580,6 +599,160 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 case .failure(let error):
                     ToastManager.shared.show("❌ Failed to load task: \(error.localizedDescription)", type: .error)
                     print("❌ [Sibling Switch] Task fetch failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    // MARK: - Root Selector
+
+    private func showRootSelector() {
+        print("🌳 [Root Selector] Triggered via Cmd+Shift+R")
+
+        // Fetch all root tasks from CloudKit
+        CloudKitManager.shared.fetchRoots { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let roots):
+                    if roots.isEmpty {
+                        ToastManager.shared.show("⚠️ No root tasks found", type: .error)
+                        print("⚠️ [Root Selector] No root tasks in database")
+                        return
+                    }
+
+                    // Get current task's root_id to highlight current root
+                    let currentRootId = AppState.shared.currentTask?.rootId
+
+                    let rootList = roots.map { (id: $0.id, text: $0.text) }
+
+                    print("✅ [Root Selector] Found \(rootList.count) roots")
+                    print("📊 [Root Selector] Current root ID: \(currentRootId ?? "nil")")
+
+                    // Show panel with roots
+                    self?.rootSelectorPanel.show(roots: rootList, currentRootId: currentRootId)
+
+                case .failure(let error):
+                    ToastManager.shared.show("❌ Failed to fetch roots: \(error.localizedDescription)", type: .error)
+                    print("❌ [Root Selector] Fetch failed: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func handleRootSelection(rootId: String, rootText: String) {
+        print("🔄 [Root Switch] Selected root: \(rootText) (ID: \(rootId))")
+
+        // Hide the panel first
+        rootSelectorPanel.hide()
+
+        // Fetch the latest task in this tree
+        CloudKitManager.shared.fetchLatestTaskInTree(rootId: rootId) { [weak self] result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let latestTaskRecord):
+                    let taskId = latestTaskRecord.recordID.recordName
+                    let text = latestTaskRecord["text"] as? String ?? rootText
+                    let parentId = latestTaskRecord["parent_id"] as? String
+                    let rootIdFromRecord = latestTaskRecord["root_id"] as? String
+
+                    print("📝 [Root Switch] Latest task in tree: \(text)")
+                    print("📝 [Root Switch] Task metadata: taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootIdFromRecord ?? "nil")")
+
+                    // Update AppState
+                    AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootIdFromRecord)
+
+                    // Fetch all display info for pointer update
+                    let dispatchGroup = DispatchGroup()
+                    var parentTaskText: String?
+                    var rootTaskText: String?
+                    var showEllipsis = false
+                    var siblingPosition: Int?
+                    var siblingCount: Int?
+
+                    // Fetch parent task text if it exists
+                    if let parentId = parentId {
+                        dispatchGroup.enter()
+                        CloudKitManager.shared.fetchTaskById(parentId) { result in
+                            defer { dispatchGroup.leave() }
+                            switch result {
+                            case .success(let parentRecord):
+                                parentTaskText = parentRecord["text"] as? String
+                                print("✅ [Root Switch] Fetched parent text: \(parentTaskText ?? "nil")")
+
+                                // Calculate showEllipsis: check if parent's parent != root
+                                if let parentParentId = parentRecord["parent_id"] as? String,
+                                   let rootId = rootIdFromRecord,
+                                   parentParentId != rootId {
+                                    showEllipsis = true
+                                    print("📊 [Root Switch] showEllipsis=true (parent's parent exists and != root)")
+                                } else {
+                                    print("📊 [Root Switch] showEllipsis=false")
+                                }
+                            case .failure(let error):
+                                print("⚠️ [Root Switch] Parent fetch failed: \(error.localizedDescription)")
+                            }
+                        }
+
+                        // Fetch siblings
+                        dispatchGroup.enter()
+                        CloudKitManager.shared.fetchSiblings(parentId: parentId) { result in
+                            defer { dispatchGroup.leave() }
+                            switch result {
+                            case .success(let siblings):
+                                siblingCount = siblings.count + 1  // +1 for potential index lag
+                                if let position = siblings.firstIndex(where: { $0.id == taskId }) {
+                                    siblingPosition = position + 1  // 1-based
+                                    print("✅ [Root Switch] Sibling position: \(siblingPosition!)/\(siblingCount!)")
+                                }
+                            case .failure(let error):
+                                print("⚠️ [Root Switch] Sibling fetch failed: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+
+                    // Fetch root task text if it exists
+                    if let rootId = rootIdFromRecord {
+                        dispatchGroup.enter()
+                        CloudKitManager.shared.fetchTaskById(rootId) { result in
+                            defer { dispatchGroup.leave() }
+                            switch result {
+                            case .success(let rootRecord):
+                                rootTaskText = rootRecord["text"] as? String
+                                print("✅ [Root Switch] Fetched root text: \(rootTaskText ?? "nil")")
+                            case .failure(let error):
+                                print("⚠️ [Root Switch] Root fetch failed: \(error.localizedDescription)")
+                            }
+                        }
+                    }
+
+                    // Wait for all fetches to complete, then update pointer
+                    dispatchGroup.notify(queue: .main) {
+                        print("📊 [Root Switch] All fetches complete - updating pointer")
+
+                        // Update CurrentTaskPointer with all display metadata
+                        CloudKitManager.shared.updateCurrentTaskPointer(
+                            taskId: taskId,
+                            text: text,
+                            parentId: parentId,
+                            rootId: rootIdFromRecord,
+                            parentTaskText: parentTaskText,
+                            rootTaskText: rootTaskText,
+                            showEllipsis: showEllipsis,
+                            siblingPosition: siblingPosition,
+                            siblingCount: siblingCount
+                        ) { error in
+                            if let error = error {
+                                print("⚠️ [Root Switch] Pointer update failed: \(error.localizedDescription)")
+                            }
+                        }
+
+                        // Show success toast
+                        ToastManager.shared.show("✓ Switched to \(rootText) tree", type: .success)
+                    }
+
+                case .failure(let error):
+                    ToastManager.shared.show("❌ Failed to load latest task: \(error.localizedDescription)", type: .error)
+                    print("❌ [Root Switch] Latest task fetch failed: \(error.localizedDescription)")
                 }
             }
         }

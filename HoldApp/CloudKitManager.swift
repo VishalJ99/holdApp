@@ -284,6 +284,71 @@ class CloudKitManager {
         }
     }
 
+    // Fetch all root tasks (tasks with no parent)
+    func fetchRoots(completion: @escaping (Result<[(id: String, text: String, timestamp: Date)], Error>) -> Void) {
+        let fetchStartTime = Date()
+        print("🌳 [CloudKit] Fetching root tasks (parent_id NOT set)")
+
+        // Query for all tasks where parent_id is NOT set
+        // CloudKit syntax: NOT (field != nil) means "field is nil or doesn't exist"
+        let predicate = NSPredicate(format: "NOT (parent_id != nil)")
+        let query = CKQuery(recordType: "Task", predicate: predicate)
+
+        // Sort by creation time for stable ordering (newest first)
+        query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+
+        database.perform(query, inZoneWith: nil) { records, error in
+            let fetchTime = Date().timeIntervalSince(fetchStartTime)
+
+            if let error = error {
+                print("❌ [CloudKit] Root fetch failed after \(String(format: "%.2f", fetchTime))s: \(error.localizedDescription)")
+                completion(.failure(error))
+            } else if let records = records {
+                let roots = records.compactMap { record -> (id: String, text: String, timestamp: Date)? in
+                    guard let text = record["text"] as? String,
+                          let timestamp = record["timestamp"] as? Date else {
+                        return nil
+                    }
+                    return (id: record.recordID.recordName, text: text, timestamp: timestamp)
+                }
+                print("✅ [CloudKit] Fetched \(roots.count) root tasks in \(String(format: "%.2f", fetchTime))s")
+                completion(.success(roots))
+            }
+        }
+    }
+
+    // Fetch the latest (most recently created) task in a given tree
+    func fetchLatestTaskInTree(rootId: String, completion: @escaping (Result<CKRecord, Error>) -> Void) {
+        let fetchStartTime = Date()
+        print("🌳 [CloudKit] Fetching latest task in tree with rootId: \(rootId)")
+
+        // Query for all tasks with this root_id OR tasks that ARE this root (for single-task trees)
+        let predicate = NSPredicate(format: "root_id == %@ OR SELF == %@",
+                                   rootId,
+                                   CKRecord.ID(recordName: rootId))
+        let query = CKQuery(recordType: "Task", predicate: predicate)
+
+        // Sort by timestamp descending (newest first)
+        query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+
+        database.perform(query, inZoneWith: nil) { records, error in
+            let fetchTime = Date().timeIntervalSince(fetchStartTime)
+
+            if let error = error {
+                print("❌ [CloudKit] Latest task fetch failed after \(String(format: "%.2f", fetchTime))s: \(error.localizedDescription)")
+                completion(.failure(error))
+            } else if let records = records, let latestTask = records.first {
+                let taskText = latestTask["text"] as? String ?? "Unknown"
+                print("✅ [CloudKit] Found latest task in tree: \(taskText) in \(String(format: "%.2f", fetchTime))s")
+                completion(.success(latestTask))
+            } else {
+                print("❌ [CloudKit] No tasks found in tree after \(String(format: "%.2f", fetchTime))s")
+                let error = NSError(domain: "HoldApp", code: 404, userInfo: [NSLocalizedDescriptionKey: "No tasks found in tree"])
+                completion(.failure(error))
+            }
+        }
+    }
+
     // Subscribe to current task pointer changes (for real-time updates on iPhone)
     func subscribeToTaskChanges(completion: @escaping (Error?) -> Void) {
         print("🔔 [CloudKit] Setting up subscription...")
