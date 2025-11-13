@@ -287,11 +287,11 @@ class CloudKitManager {
     // Fetch all root tasks (tasks with no parent)
     func fetchRoots(completion: @escaping (Result<[(id: String, text: String, timestamp: Date)], Error>) -> Void) {
         let fetchStartTime = Date()
-        print("🌳 [CloudKit] Fetching root tasks (parent_id NOT set)")
+        print("🌳 [CloudKit] Fetching all tasks, will filter for roots client-side")
 
-        // Query for all tasks where parent_id is NOT set
-        // CloudKit syntax: NOT (field != nil) means "field is nil or doesn't exist"
-        let predicate = NSPredicate(format: "NOT (parent_id != nil)")
+        // Fetch all tasks - CloudKit doesn't support querying for nil fields
+        // We filter client-side for parent_id == nil
+        let predicate = NSPredicate(value: true)
         let query = CKQuery(recordType: "Task", predicate: predicate)
 
         // Sort by creation time for stable ordering (newest first)
@@ -304,14 +304,17 @@ class CloudKitManager {
                 print("❌ [CloudKit] Root fetch failed after \(String(format: "%.2f", fetchTime))s: \(error.localizedDescription)")
                 completion(.failure(error))
             } else if let records = records {
-                let roots = records.compactMap { record -> (id: String, text: String, timestamp: Date)? in
+                // Filter for root tasks (parent_id is nil) client-side
+                let rootRecords = records.filter { $0["parent_id"] == nil }
+
+                let roots = rootRecords.compactMap { record -> (id: String, text: String, timestamp: Date)? in
                     guard let text = record["text"] as? String,
                           let timestamp = record["timestamp"] as? Date else {
                         return nil
                     }
                     return (id: record.recordID.recordName, text: text, timestamp: timestamp)
                 }
-                print("✅ [CloudKit] Fetched \(roots.count) root tasks in \(String(format: "%.2f", fetchTime))s")
+                print("✅ [CloudKit] Fetched \(records.count) total tasks, filtered to \(roots.count) roots in \(String(format: "%.2f", fetchTime))s")
                 completion(.success(roots))
             }
         }

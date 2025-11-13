@@ -85,11 +85,12 @@
 - **Responsibility**: Global keyboard shortcut registration
 - **Key Logic**:
   - Uses Carbon API to register system-wide hotkeys
-  - Triggers callbacks for Spotlight panel and Sibling Selector
+  - Triggers callbacks for Spotlight panel, Sibling Selector, and Root Selector
   - Registered hotkeys:
     - Cmd+Shift+Space (ID 1): Show Spotlight panel
-    - Escape (ID 2): Hide panel
     - Cmd+Shift+S (ID 3): Show Sibling Selector panel
+    - Cmd+Shift+R (ID 4): Show Root Selector panel
+  - Note: Escape (ID 2) was removed - now handled locally by each panel
 
 **`SpotlightViewController.swift`** (`HoldApp/SpotlightViewController.swift`)
 - **Responsibility**: The capture bar UI (text field, modifier key detection)
@@ -180,6 +181,46 @@
 - **Methods**:
   - `show(siblings: [(id: String, text: String)], currentIndex: Int)` - Display panel with sibling list
   - `hide()` - Close panel
+
+**`RootSelectorViewController.swift`** (`HoldApp/RootSelectorViewController.swift`) - NEW
+- **Responsibility**: Displays list of root tasks for selection (Cmd+Shift+R)
+- **Key Logic**:
+  - Uses NSTableView to display all root tasks (tasks with no parent)
+  - Sorts by creation time (newest first)
+  - Highlights current root (if current task belongs to a tree)
+  - Arrow keys navigate through list
+  - Enter key selects highlighted root → fires `onRootSelected` callback
+  - Escape key cancels → fires `onCancel` callback
+- **UI Design**:
+  - Minimal, terminal-inspired aesthetic matching sibling selector
+  - Black background, white text, SF Pro Rounded font
+  - Current root: opacity 1.0, semibold
+  - Other roots: opacity 0.7, regular weight
+  - Format: Just task text (no position indicators like sibling selector)
+- **Callbacks**:
+  - `onRootSelected: ((String, String) -> Void)?` - (rootId, rootText)
+  - `onCancel: (() -> Void)?`
+
+**`RootSelectorPanel.swift`** (`HoldApp/RootSelectorPanel.swift`) - NEW
+- **Responsibility**: Floating window container for root selector
+- **Key Logic**:
+  - NSPanel configured as borderless, floating window (level: `.floating`)
+  - Dynamically adjusts height based on root count (min: 100px, max: 500px)
+  - Centers on screen when shown
+  - Black background (0.95 alpha), rounded corners (12px radius)
+  - Local Escape handlers (same pattern as SpotlightPanel and SiblingSelectorPanel)
+- **Methods**:
+  - `show(roots: [(id: String, text: String)], currentRootId: String?)` - Display panel with root list
+  - `hide()` - Close panel
+
+**`RootTableView.swift`** (`HoldApp/RootTableView.swift`) - NEW
+- **Responsibility**: Custom NSTableView subclass for keyboard event handling
+- **Key Logic**:
+  - Overrides `acceptsFirstResponder` to return true
+  - Overrides `keyDown()` to intercept Enter and Escape keys
+  - Forwards Enter/Escape to `RootTableViewDelegate`
+  - Allows NSTableView to handle arrow keys naturally (row selection)
+- **Purpose**: NSTableView intercepts keyboard events internally, this forwards them to the view controller
 
 ---
 
@@ -449,6 +490,119 @@ Task Creation Flow (e.g., Shift+Enter creates child)
 - Parent fetch, root fetch, sibling fetch run in parallel (not sequential)
 - All must complete before pointer update
 - Reduces total sync time from 3 sequential fetches to 1 parallel batch
+
+---
+
+## Root Selector System
+
+The root selector system allows users to switch between different task trees by selecting a root task and automatically jumping to the most recently created task in that tree.
+
+### Overview
+
+**Key Components:**
+- `HoldApp/RootTableView.swift` - Custom NSTableView subclass for keyboard event handling
+- `HoldApp/RootSelectorViewController.swift` - Root list UI controller
+- `HoldApp/RootSelectorPanel.swift` - Floating panel for root selection
+- `HoldApp/HotkeyManager.swift` - Cmd+Shift+R hotkey registration
+- `HoldApp/AppDelegate.swift` - Root selector logic (lines 609-759)
+- `HoldApp/CloudKitManager.swift` - `fetchRoots()` and `fetchLatestTaskInTree()` methods
+
+**User Flow:**
+```
+User: Cmd+Shift+R
+├─ Fetch all root tasks (tasks with no parent_id)
+├─ Show panel with roots sorted by creation time (newest first)
+├─ Highlight current root (if current task belongs to a tree)
+├─ User selects a root with Enter
+└─ Switch to latest task in that tree
+```
+
+**Example Scenario:**
+```
+Database has 3 root tasks:
+1. "Work Project" (created 2 weeks ago)
+   └─ Latest task: "Write tests" (created 10 min ago, 5 levels deep)
+2. "Personal Goals" (created 1 week ago)
+   └─ Latest task: "Morning routine" (created yesterday)
+3. "Shopping List" (created 3 days ago, no children)
+   └─ Latest task: "Shopping List" (same as root)
+
+User presses Cmd+Shift+R → Panel shows:
+[1] Work Project         ← newest root
+[2] Personal Goals
+[3] Shopping List        ← oldest root
+
+User selects "Work Project" → Switches to "Write tests"
+(not the root, but the newest task in that tree)
+```
+
+### CloudKit Queries
+
+**fetchRoots()** (CloudKitManager.swift:287-318)
+```swift
+// Query for all tasks where parent_id is NOT set
+let predicate = NSPredicate(format: "NOT (parent_id != nil)")
+query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+// Returns: [(id, text, timestamp)] sorted newest first
+```
+
+**fetchLatestTaskInTree()** (CloudKitManager.swift:320-350)
+```swift
+// Query for all tasks in this tree OR the root itself
+let predicate = NSPredicate(format: "root_id == %@ OR SELF == %@", rootId, CKRecord.ID(recordName: rootId))
+query.sortDescriptors = [NSSortDescriptor(key: "timestamp", ascending: false)]
+// Returns: First result (newest task in tree)
+```
+
+**Why OR SELF == %@?**
+Handles single-task trees where the root has no children. The root task itself doesn't have a `root_id` field, so we need to explicitly query for it by record ID.
+
+### AppDelegate Logic
+
+**showRootSelector()** (lines 609-640)
+1. Fetch all roots via `fetchRoots()`
+2. Get current task's `root_id` from AppState
+3. Show panel with roots, highlight current root
+4. Error handling: Show toast if no roots found
+
+**handleRootSelection()** (lines 642-759)
+1. Fetch latest task in selected tree via `fetchLatestTaskInTree()`
+2. Extract task metadata (taskId, text, parentId, rootId)
+3. Update AppState with selected task
+4. Fetch display metadata using DispatchGroup:
+   - Parent text (if exists)
+   - Root text (if exists)
+   - Siblings (if has parent)
+   - Calculate showEllipsis
+5. Update CurrentTaskPointer with all 10 fields
+6. Show success toast: "✓ Switched to [root] tree"
+
+**Key Difference from Sibling Selector:**
+- Sibling selector switches to a specific sibling (user knows exact task)
+- Root selector switches to latest task in tree (user doesn't know which task, just wants "latest work")
+
+### Data Flow
+
+```
+User: Cmd+Shift+R on Mac
+├─ 1. Fetch all roots from CloudKit
+├─    Query: NOT (parent_id != nil)
+├─    Results: ["Work Project", "Personal Goals", "Shopping List"]
+├─ 2. Show panel with current root highlighted
+├─ 3. User selects "Work Project"
+├─ 4. Fetch latest task in tree
+├─    Query: root_id == "Work Project" OR SELF == "Work Project"
+├─    Sort by timestamp DESC
+├─    Result: "Write tests" (created 10 min ago)
+├─ 5. Fetch display metadata (parallel)
+├─    - Parent: "Implementation"
+├─    - Root: "Work Project"
+├─    - Siblings: ["Setup repo", "Write tests"] → position 2/2
+├─    - showEllipsis: false (only 3 levels)
+├─ 6. Update CurrentTaskPointer
+├─    All 10 fields: taskId, text, parentId, rootId, parentText, rootText, ellipsis, position, count
+└─ 7. Push notification → iPhone displays "Write tests" with hierarchy
+```
 
 ---
 
@@ -1305,11 +1459,15 @@ Do NOT allow:
 HoldApp/
 ├── HoldApp/                          # Mac App Target
 │   ├── AppDelegate.swift             # Mac app lifecycle, task capture, sibling selection coordinator
-│   ├── HotkeyManager.swift           # Global keyboard shortcuts (Cmd+Shift+Space, Cmd+Shift+S)
+│   ├── HotkeyManager.swift           # Global keyboard shortcuts (Cmd+Shift+Space, Cmd+Shift+S, Cmd+Shift+R)
 │   ├── SpotlightViewController.swift # Capture bar UI (text field)
 │   ├── SpotlightPanel.swift          # Floating window container for Spotlight
 │   ├── SiblingSelectorViewController.swift # 🆕 Sibling task list UI (Cmd+Shift+S)
 │   ├── SiblingSelectorPanel.swift    # 🆕 Floating window container for sibling selector
+│   ├── SiblingTableView.swift        # 🆕 Custom NSTableView for keyboard event handling (siblings)
+│   ├── RootSelectorViewController.swift # 🆕 Root task list UI (Cmd+Shift+R)
+│   ├── RootSelectorPanel.swift       # 🆕 Floating window container for root selector
+│   ├── RootTableView.swift           # 🆕 Custom NSTableView for keyboard event handling (roots)
 │   ├── SubmitTextField.swift         # Custom NSTextField for modifier key detection
 │   ├── TaskInputUI.swift             # Protocol for task input interface
 │   ├── AppState.swift                # Global state (current task tracking)
