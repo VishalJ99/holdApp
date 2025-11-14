@@ -726,8 +726,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Final fallback: No tasks left
-        print("ℹ️ [Dismiss] No tasks remaining - clearing AppState")
+        print("ℹ️ [Dismiss] No tasks remaining - clearing AppState and CloudKit pointer")
         AppState.shared.clearCurrent()
+
+        // Clear CloudKit pointer so iPhone shows "No current task"
+        CloudKitManager.shared.clearCurrentTaskPointer { error in
+            if let error = error {
+                print("⚠️ [Dismiss] Failed to clear pointer: \(error.localizedDescription)")
+            } else {
+                print("✅ [Dismiss] Pointer cleared - iPhone will update")
+            }
+        }
+
         ToastManager.shared.show("Task cleared (no tasks remaining)", type: .success)
     }
 
