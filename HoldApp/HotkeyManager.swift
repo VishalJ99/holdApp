@@ -6,12 +6,14 @@ class HotkeyManager {
     private var siblingSelectorHotKeyRef: EventHotKeyRef?
     private var rootSelectorHotKeyRef: EventHotKeyRef?
     private var dismissHotKeyRef: EventHotKeyRef?
+    private var nukeHotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
 
     var onShowHotkey: (() -> Void)?
     var onSiblingSelector: (() -> Void)?
     var onRootSelector: (() -> Void)?
     var onDismiss: (() -> Void)?
+    var onNuke: (() -> Void)?
 
     deinit {
         unregisterHotkeys()
@@ -53,6 +55,14 @@ class HotkeyManager {
             hotkeyRef: &dismissHotKeyRef
         )
 
+        // Register Command+Shift+Backspace to nuke all tasks
+        registerHotkey(
+            keyCode: UInt32(kVK_Delete),
+            modifiers: UInt32(cmdKey | shiftKey),
+            hotkeyId: 6,
+            hotkeyRef: &nukeHotKeyRef
+        )
+
         // Install event handler
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
@@ -70,6 +80,8 @@ class HotkeyManager {
                 manager.onRootSelector?()
             } else if hotkeyId.id == 5 {
                 manager.onDismiss?()
+            } else if hotkeyId.id == 6 {
+                manager.onNuke?()
             }
             // Note: hotkeyId 2 (Escape) removed - handled locally by panels
 
@@ -98,6 +110,10 @@ class HotkeyManager {
         if let ref = dismissHotKeyRef {
             UnregisterEventHotKey(ref)
             dismissHotKeyRef = nil
+        }
+        if let ref = nukeHotKeyRef {
+            UnregisterEventHotKey(ref)
+            nukeHotKeyRef = nil
         }
         if let handler = eventHandler {
             RemoveEventHandler(handler)

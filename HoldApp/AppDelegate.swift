@@ -19,6 +19,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
 
+    // Nuke confirmation state
+    private var nukeConfirmationPending: Bool = false
+    private var nukeConfirmationTimer: Timer?
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
         // Initialize components
@@ -85,6 +88,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotkeyManager.onDismiss = { [weak self] in
             self?.dismissCurrentTask()
+        }
+        hotkeyManager.onNuke = { [weak self] in
+            self?.handleNuke()
         }
         hotkeyManager.registerHotkeys()
 
@@ -995,6 +1001,51 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 print("✅ [Task Update] CloudKit pointer updated with new text")
             }
+        }
+    }
+
+    // MARK: - Nuke All Tasks
+
+    private func handleNuke() {
+        if nukeConfirmationPending {
+            // Second press - execute nuke
+            print("💣 [Nuke] Confirmation received - nuking all tasks")
+
+            nukeConfirmationTimer?.invalidate()
+            nukeConfirmationTimer = nil
+            nukeConfirmationPending = false
+
+            // Clear tasks.json
+            LocalTaskStore.shared.clearAllTasks()
+            print("✅ [Nuke] Cleared tasks.json")
+
+            // Clear AppState
+            AppState.shared.clearCurrent()
+            print("✅ [Nuke] Cleared AppState")
+
+            // Clear CloudKit pointer
+            CloudKitManager.shared.clearCurrentTaskPointer { error in
+                if let error = error {
+                    print("⚠️ [Nuke] Failed to clear pointer: \(error.localizedDescription)")
+                } else {
+                    print("✅ [Nuke] Cleared CloudKit pointer - iPhone will update")
+                }
+            }
+
+            ToastManager.shared.show("💣 All tasks nuked - fresh state", type: .success)
+        } else {
+            // First press - request confirmation
+            print("⚠️ [Nuke] First press - requesting confirmation")
+            nukeConfirmationPending = true
+
+            // Reset confirmation after 3 seconds
+            nukeConfirmationTimer = Timer.scheduledTimer(withTimeInterval: 3.0, repeats: false) { [weak self] _ in
+                print("⏱️ [Nuke] Confirmation timeout - reset")
+                self?.nukeConfirmationPending = false
+                self?.nukeConfirmationTimer = nil
+            }
+
+            ToastManager.shared.show("⚠️ Press Cmd+Shift+Backspace again to confirm nuke", type: .error)
         }
     }
 }
