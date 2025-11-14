@@ -78,6 +78,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.onRootSelector = { [weak self] in
             self?.showRootSelector()
         }
+        hotkeyManager.onDismiss = { [weak self] in
+            self?.dismissCurrentTask()
+        }
         hotkeyManager.registerHotkeys()
     }
 
@@ -593,6 +596,197 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Show success toast
         ToastManager.shared.show("✓ Switched to \(rootText) tree", type: .success)
+    }
+
+    // MARK: - Task Dismissal
+
+    private func dismissCurrentTask() {
+        print("🗑️ [Dismiss] Triggered")
+
+        // Validate: Current task exists
+        guard let current = AppState.shared.currentTask else {
+            ToastManager.shared.show("⚠️ No current task to dismiss", type: .error)
+            print("⚠️ [Dismiss] No current task in AppState")
+            return
+        }
+
+        // Validate: Task has no children (leaf node check)
+        if LocalTaskStore.shared.hasChildren(taskId: current.id) {
+            ToastManager.shared.show("⚠️ Cannot dismiss task with children", type: .error)
+            print("⚠️ [Dismiss] Task \(current.id) has children - operation blocked")
+            return
+        }
+
+        // Fetch full task record BEFORE deletion (need timestamp for fallback)
+        guard let taskRecord = LocalTaskStore.shared.fetchTaskById(current.id) else {
+            ToastManager.shared.show("❌ Task not found", type: .error)
+            print("❌ [Dismiss] Task record not found")
+            return
+        }
+
+        let taskText = taskRecord.text
+        let taskTimestamp = taskRecord.timestamp
+        let parentId = taskRecord.parent_id
+        let rootId = taskRecord.root_id
+
+        print("📝 [Dismiss] Task to delete: \(taskText)")
+        print("📊 [Dismiss] Task metadata: parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil") | timestamp=\(taskTimestamp)")
+
+        // Delete task from local storage
+        guard LocalTaskStore.shared.deleteTask(id: current.id) else {
+            ToastManager.shared.show("❌ Failed to delete task", type: .error)
+            return
+        }
+
+        print("✅ [Dismiss] Task deleted from storage")
+
+        // NAVIGATION FALLBACK ALGORITHM
+
+        // Try 1: Find next sibling by creation time
+        if let parentId = parentId {
+            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
+            let nextSiblings = siblings
+                .filter { $0.timestamp > taskTimestamp }  // Created AFTER current task
+                .sorted { $0.timestamp < $1.timestamp }   // Oldest first
+
+            if let nextSibling = nextSiblings.first {
+                print("✅ [Dismiss] Found next sibling: \(nextSibling.text)")
+                navigateToTask(task: nextSibling, reason: "next sibling")
+                ToastManager.shared.show("Task cleared", type: .success)
+                return
+            }
+
+            print("ℹ️ [Dismiss] No next sibling found")
+        }
+
+        // Try 2: Navigate to parent (if not root)
+        if let parentId = parentId,
+           let rootId = rootId,
+           parentId != rootId {
+            if let parentTask = LocalTaskStore.shared.fetchTaskById(parentId) {
+                print("✅ [Dismiss] Navigating to parent: \(parentTask.text)")
+                navigateToTask(task: parentTask, reason: "parent")
+                ToastManager.shared.show("Task cleared", type: .success)
+                return
+            }
+        }
+
+        // Try 3: If parent is root, check for parent's siblings
+        if let parentId = parentId,
+           let parentTask = LocalTaskStore.shared.fetchTaskById(parentId),
+           let grandparentId = parentTask.parent_id {
+            let parentSiblings = LocalTaskStore.shared.fetchSiblings(parentId: grandparentId)
+            let nextParentSiblings = parentSiblings
+                .filter { $0.timestamp > parentTask.timestamp }
+                .sorted { $0.timestamp < $1.timestamp }
+
+            if let nextParentSibling = nextParentSiblings.first {
+                print("✅ [Dismiss] Found parent's next sibling: \(nextParentSibling.text)")
+                navigateToTask(task: nextParentSibling, reason: "parent's sibling")
+                ToastManager.shared.show("Task cleared", type: .success)
+                return
+            }
+
+            print("ℹ️ [Dismiss] No parent siblings found")
+        }
+
+        // Try 4: Current task is/was a root - find next root
+        if parentId == nil {
+            let roots = LocalTaskStore.shared.fetchRoots()
+            let nextRoots = roots
+                .filter { $0.timestamp > taskTimestamp }
+                .sorted { $0.timestamp < $1.timestamp }  // Reverse DESC sort to ASC
+
+            if let nextRoot = nextRoots.first {
+                print("✅ [Dismiss] Found next root: \(nextRoot.text)")
+
+                // Navigate to latest task in that root's tree
+                if let latestInTree = LocalTaskStore.shared.fetchLatestInTree(rootId: nextRoot.id) {
+                    navigateToTask(task: latestInTree, reason: "next root tree")
+                    ToastManager.shared.show("Task cleared", type: .success)
+                    return
+                }
+            }
+
+            print("ℹ️ [Dismiss] No next root found")
+        }
+
+        // Try 5: Fallback to any remaining root
+        let allRoots = LocalTaskStore.shared.fetchRoots()
+        if let anyRoot = allRoots.first {
+            print("✅ [Dismiss] Falling back to latest root: \(anyRoot.text)")
+            if let latestInTree = LocalTaskStore.shared.fetchLatestInTree(rootId: anyRoot.id) {
+                navigateToTask(task: latestInTree, reason: "any remaining root")
+                ToastManager.shared.show("Task cleared", type: .success)
+                return
+            }
+        }
+
+        // Final fallback: No tasks left
+        print("ℹ️ [Dismiss] No tasks remaining - clearing AppState")
+        AppState.shared.clearCurrent()
+        ToastManager.shared.show("Task cleared (no tasks remaining)", type: .success)
+    }
+
+    /// Navigate to a task and update CloudKit pointer
+    /// Helper function used by dismissCurrentTask
+    private func navigateToTask(task: LocalTaskStore.Task, reason: String) {
+        print("🔄 [Navigate] Switching to task: \(task.text) (reason: \(reason))")
+
+        let taskId = task.id
+        let text = task.text
+        let parentId = task.parent_id
+        let rootId = task.root_id
+
+        // Update AppState
+        AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
+
+        // Fetch all display info from local storage (same pattern as sibling/root selection)
+        var parentTaskText: String? = nil
+        var rootTaskText: String? = nil
+        var showEllipsis = false
+        var siblingPosition: Int? = nil
+        var siblingCount: Int? = nil
+
+        if let parentId = parentId {
+            let parentTask = LocalTaskStore.shared.fetchTaskById(parentId)
+            parentTaskText = parentTask?.text
+
+            // Calculate showEllipsis
+            if let parentParentId = parentTask?.parent_id,
+               let rootId = rootId,
+               parentParentId != rootId {
+                showEllipsis = true
+            }
+
+            // Fetch root task text if different from parent
+            if let rootId = rootId, rootId != parentId {
+                let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
+                rootTaskText = rootTask?.text
+            }
+
+            // Fetch sibling position/count
+            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
+            siblingCount = siblings.count
+            siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+        }
+
+        // Update CloudKit pointer
+        CloudKitManager.shared.updateCurrentTaskPointer(
+            taskId: taskId,
+            text: text,
+            parentId: parentId,
+            rootId: rootId,
+            parentTaskText: parentTaskText,
+            rootTaskText: rootTaskText,
+            showEllipsis: showEllipsis,
+            siblingPosition: siblingPosition,
+            siblingCount: siblingCount
+        ) { error in
+            if let error = error {
+                print("⚠️ [Navigate] Pointer update failed: \(error.localizedDescription)")
+            }
+        }
     }
 }
 

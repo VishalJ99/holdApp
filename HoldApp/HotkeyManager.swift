@@ -5,11 +5,13 @@ class HotkeyManager {
     private var showHotKeyRef: EventHotKeyRef?
     private var siblingSelectorHotKeyRef: EventHotKeyRef?
     private var rootSelectorHotKeyRef: EventHotKeyRef?
+    private var dismissHotKeyRef: EventHotKeyRef?
     private var eventHandler: EventHandlerRef?
 
     var onShowHotkey: (() -> Void)?
     var onSiblingSelector: (() -> Void)?
     var onRootSelector: (() -> Void)?
+    var onDismiss: (() -> Void)?
 
     deinit {
         unregisterHotkeys()
@@ -43,6 +45,14 @@ class HotkeyManager {
             hotkeyRef: &rootSelectorHotKeyRef
         )
 
+        // Register Command+Shift+D to dismiss current task
+        registerHotkey(
+            keyCode: UInt32(kVK_ANSI_D),
+            modifiers: UInt32(cmdKey | shiftKey),
+            hotkeyId: 5,
+            hotkeyRef: &dismissHotKeyRef
+        )
+
         // Install event handler
         var eventType = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         InstallEventHandler(GetApplicationEventTarget(), { (nextHandler, theEvent, userData) -> OSStatus in
@@ -58,6 +68,8 @@ class HotkeyManager {
                 manager.onSiblingSelector?()
             } else if hotkeyId.id == 4 {
                 manager.onRootSelector?()
+            } else if hotkeyId.id == 5 {
+                manager.onDismiss?()
             }
             // Note: hotkeyId 2 (Escape) removed - handled locally by panels
 
@@ -82,6 +94,10 @@ class HotkeyManager {
         if let ref = rootSelectorHotKeyRef {
             UnregisterEventHotKey(ref)
             rootSelectorHotKeyRef = nil
+        }
+        if let ref = dismissHotKeyRef {
+            UnregisterEventHotKey(ref)
+            dismissHotKeyRef = nil
         }
         if let handler = eventHandler {
             RemoveEventHandler(handler)

@@ -162,4 +162,36 @@ class LocalTaskStore {
             print("Error clearing tasks: \(error)")
         }
     }
+
+    /// Delete a task by ID
+    /// Returns true if task was found and deleted, false otherwise
+    func deleteTask(id: String) -> Bool {
+        var tasksFile = loadFromFile()
+
+        // Find index of task to delete
+        guard let index = tasksFile.tasks.firstIndex(where: { $0.id == id }) else {
+            print("⚠️ [LocalTaskStore] Task not found: \(id)")
+            return false
+        }
+
+        // Remove task from array
+        let deletedTask = tasksFile.tasks.remove(at: index)
+        print("🗑️ [LocalTaskStore] Deleted task: \(deletedTask.text) (id: \(id))")
+
+        // Save updated file
+        do {
+            try saveToFile(tasksFile)
+            print("✅ [LocalTaskStore] File saved after deletion")
+            return true
+        } catch {
+            print("❌ [LocalTaskStore] Error saving after deletion: \(error)")
+            return false
+        }
+    }
+
+    /// Check if a task has any children
+    func hasChildren(taskId: String) -> Bool {
+        let allTasks = fetchAllTasks()
+        return allTasks.contains { $0.parent_id == taskId }
+    }
 }
