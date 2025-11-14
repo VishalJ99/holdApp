@@ -184,6 +184,39 @@ class CloudKitManager {
         }
     }
 
+    // Clear the current task pointer (for empty state or startup sync)
+    func clearCurrentTaskPointer(completion: @escaping (Error?) -> Void) {
+        print("🗑️ [CloudKit] Clearing CurrentTaskPointer...")
+
+        let recordID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
+        let record = CKRecord(recordType: "CurrentTaskPointer", recordID: recordID)
+
+        // Set all fields to nil/empty
+        record["currentTaskId"] = nil as String?
+        record["currentTaskText"] = nil as String?
+        record["parentId"] = nil as String?
+        record["rootId"] = nil as String?
+        record["parentTaskText"] = nil as String?
+        record["rootTaskText"] = nil as String?
+        record["showEllipsis"] = false
+        record["siblingPosition"] = nil as Int?
+        record["siblingCount"] = nil as Int?
+        record["timestamp"] = Date()
+
+        print("🔄 [CloudKit] Saving empty pointer record...")
+
+        database.save(record) { savedRecord, error in
+            if let error = error {
+                print("❌ [CloudKit] Clear pointer failed: \(error.localizedDescription)")
+                completion(error)
+            } else {
+                print("✅ [CloudKit] CurrentTaskPointer cleared successfully")
+                print("📱 [CloudKit] iPhone will now show '...' placeholder")
+                completion(nil)
+            }
+        }
+    }
+
     // Subscribe to current task pointer changes (for real-time updates on iPhone)
     func subscribeToTaskChanges(completion: @escaping (Error?) -> Void) {
         print("🔔 [CloudKit] Setting up subscription...")

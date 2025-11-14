@@ -82,6 +82,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.dismissCurrentTask()
         }
         hotkeyManager.registerHotkeys()
+
+        // Initialize app state by syncing local storage with CloudKit
+        initializeAppState()
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
@@ -785,6 +788,109 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         ) { error in
             if let error = error {
                 print("⚠️ [Navigate] Pointer update failed: \(error.localizedDescription)")
+            }
+        }
+    }
+
+    // MARK: - Startup Initialization
+
+    /// Initialize app state on launch by syncing local storage with CloudKit pointer
+    private func initializeAppState() {
+        print("🚀 [Startup] Initializing app state...")
+
+        let allTasks = LocalTaskStore.shared.fetchAllTasks()
+
+        if allTasks.isEmpty {
+            print("📭 [Startup] Local storage is empty - clearing CloudKit pointer")
+            CloudKitManager.shared.clearCurrentTaskPointer { error in
+                if let error = error {
+                    print("⚠️ [Startup] Failed to clear pointer: \(error.localizedDescription)")
+                } else {
+                    print("✅ [Startup] Pointer cleared - iPhone will show placeholder")
+                }
+            }
+            // Clear AppState as well
+            AppState.shared.clearCurrent()
+            return
+        }
+
+        print("📚 [Startup] Found \(allTasks.count) tasks in local storage")
+
+        // Find latest root
+        let roots = LocalTaskStore.shared.fetchRoots()
+        guard let latestRoot = roots.first else {
+            print("⚠️ [Startup] No root tasks found despite having tasks (data inconsistency)")
+            AppState.shared.clearCurrent()
+            return
+        }
+
+        print("🌳 [Startup] Latest root: \(latestRoot.text)")
+
+        // Get deepest task in that root's tree
+        guard let latestInTree = LocalTaskStore.shared.fetchLatestInTree(rootId: latestRoot.id) else {
+            print("⚠️ [Startup] Could not find latest task in tree")
+            AppState.shared.clearCurrent()
+            return
+        }
+
+        print("🎯 [Startup] Latest task in tree: \(latestInTree.text)")
+
+        // Update AppState
+        AppState.shared.setCurrent(
+            id: latestInTree.id,
+            text: latestInTree.text,
+            parentId: latestInTree.parent_id,
+            rootId: latestInTree.root_id
+        )
+
+        // Fetch all display metadata
+        var parentTaskText: String? = nil
+        var rootTaskText: String? = nil
+        var showEllipsis = false
+        var siblingPosition: Int? = nil
+        var siblingCount: Int? = nil
+
+        if let parentId = latestInTree.parent_id {
+            let parentTask = LocalTaskStore.shared.fetchTaskById(parentId)
+            parentTaskText = parentTask?.text
+
+            // Calculate showEllipsis
+            if let parentParentId = parentTask?.parent_id,
+               let rootId = latestInTree.root_id,
+               parentParentId != rootId {
+                showEllipsis = true
+            }
+
+            // Fetch root task text if different from parent
+            if let rootId = latestInTree.root_id, rootId != parentId {
+                let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
+                rootTaskText = rootTask?.text
+            }
+
+            // Fetch sibling position/count
+            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
+            siblingCount = siblings.count
+            siblingPosition = siblings.firstIndex(where: { $0.id == latestInTree.id }).map { $0 + 1 }
+        }
+
+        // Update CloudKit pointer
+        print("☁️ [Startup] Syncing pointer to CloudKit...")
+        CloudKitManager.shared.updateCurrentTaskPointer(
+            taskId: latestInTree.id,
+            text: latestInTree.text,
+            parentId: latestInTree.parent_id,
+            rootId: latestInTree.root_id,
+            parentTaskText: parentTaskText,
+            rootTaskText: rootTaskText,
+            showEllipsis: showEllipsis,
+            siblingPosition: siblingPosition,
+            siblingCount: siblingCount
+        ) { error in
+            if let error = error {
+                print("⚠️ [Startup] Pointer update failed: \(error.localizedDescription)")
+            } else {
+                print("✅ [Startup] App state initialized and synced to CloudKit")
+                print("📱 [Startup] iPhone will now show: \(latestInTree.text)")
             }
         }
     }
