@@ -4,9 +4,15 @@ class SpotlightViewController: NSViewController, TaskInputUI {
 
     private var textField: SubmitTextField!
 
+    // MARK: - Edit Mode State
+
+    private var isEditMode: Bool = false
+    private var editingTaskId: String?
+
     // MARK: - TaskInputUI Protocol
 
     var onTaskSubmit: ((String, TaskCreationType) -> Void)?
+    var onTaskUpdate: ((String, String) -> Void)?
     var onCancel: (() -> Void)?
 
     var isVisible: Bool {
@@ -62,7 +68,27 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        // Detect which modifier keys are pressed
+        // EDIT MODE: Plain Enter updates task, modifiers are DISABLED
+        if isEditMode {
+            if !modifiers.isEmpty {
+                // User pressed modifier keys in edit mode - show warning
+                print("⚠️ [Edit Mode] Modifiers disabled in edit mode")
+                ToastManager.shared.show("⚠️ Modifiers disabled in edit mode", type: .error)
+                return
+            }
+
+            // Plain Enter in edit mode = update task
+            guard let taskId = editingTaskId else {
+                print("❌ [Edit Mode] No editingTaskId set")
+                return
+            }
+
+            print("✏️ [Edit Mode] Updating task \(taskId) with text: \"\(text)\"")
+            onTaskUpdate?(taskId, text)
+            return
+        }
+
+        // NORMAL MODE: Detect which modifier keys are pressed
         let controlPressed = modifiers.contains(.control)
         let shiftPressed = modifiers.contains(.shift)
         let commandPressed = modifiers.contains(.command)
@@ -115,6 +141,18 @@ extension SpotlightViewController: NSTextFieldDelegate {
     private func loadCurrentTask() {
         if let current = AppState.shared.currentTask {
             textField.stringValue = current.text
+            textField.placeholderString = "Editing task... (Press Enter to save)"
+            isEditMode = true
+            editingTaskId = current.id
+            print("✏️ [Edit Mode] Enabled - editing task: \(current.id)")
         }
+    }
+
+    func resetEditMode() {
+        isEditMode = false
+        editingTaskId = nil
+        textField.stringValue = ""
+        textField.placeholderString = "What task are you holding?"
+        print("🔄 [Edit Mode] Reset")
     }
 }

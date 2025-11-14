@@ -30,6 +30,12 @@ protocol TaskInputUI {
     ///   - type: The creation type based on modifier keys pressed
     var onTaskSubmit: ((String, TaskCreationType) -> Void)? { get set }
 
+    /// Called when user updates a task in edit mode
+    /// - Parameters:
+    ///   - taskId: The ID of the task being updated
+    ///   - newText: The updated task text
+    var onTaskUpdate: ((String, String) -> Void)? { get set }
+
     /// Called when user cancels (presses Escape)
     var onCancel: (() -> Void)? { get set }
 }

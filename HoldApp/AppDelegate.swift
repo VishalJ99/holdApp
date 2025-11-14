@@ -34,7 +34,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.handleTaskCreation(text: text, type: type)
         }
 
+        spotlightViewController.onTaskUpdate = { [weak self] taskId, newText in
+            self?.handleTaskUpdate(taskId: taskId, newText: newText)
+        }
+
         spotlightViewController.onCancel = { [weak self] in
+            self?.spotlightViewController.resetEditMode()
             self?.spotlightPanel.hide()
         }
 
@@ -901,6 +906,94 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 print("✅ [Startup] App state initialized and synced to CloudKit")
                 print("📱 [Startup] iPhone will now show: \(latestInTree.text)")
+            }
+        }
+    }
+
+    // MARK: - Task Update
+
+    private func handleTaskUpdate(taskId: String, newText: String) {
+        print("✏️ [Task Update] taskId=\(taskId) | newText=\"\(newText)\"")
+
+        // Update in local storage
+        guard LocalTaskStore.shared.updateTaskText(id: taskId, newText: newText) else {
+            ToastManager.shared.show("❌ Failed to update task", type: .error)
+            return
+        }
+
+        // Update AppState if this is the current task
+        if let current = AppState.shared.currentTask, current.id == taskId {
+            AppState.shared.setCurrent(
+                id: current.id,
+                text: newText,  // Updated text
+                parentId: current.parentId,
+                rootId: current.rootId
+            )
+
+            // Update CloudKit pointer with new text (preserving all other display info)
+            updateCurrentTaskPointerAfterEdit(taskId: taskId, newText: newText)
+        }
+
+        spotlightViewController.resetEditMode()
+        spotlightPanel.hide()
+        ToastManager.shared.show("✓ Task updated", type: .success)
+    }
+
+    private func updateCurrentTaskPointerAfterEdit(taskId: String, newText: String) {
+        // Fetch existing display metadata
+        guard let task = LocalTaskStore.shared.fetchTaskById(taskId) else {
+            print("❌ [Task Update] Task not found for pointer update")
+            return
+        }
+
+        let parentId = task.parent_id
+        let rootId = task.root_id
+
+        var parentTaskText: String? = nil
+        var rootTaskText: String? = nil
+        var showEllipsis = false
+        var siblingPosition: Int? = nil
+        var siblingCount: Int? = nil
+
+        if let parentId = parentId {
+            let parentTask = LocalTaskStore.shared.fetchTaskById(parentId)
+            parentTaskText = parentTask?.text
+
+            // Calculate showEllipsis
+            if let parentParentId = parentTask?.parent_id,
+               let rootId = rootId,
+               parentParentId != rootId {
+                showEllipsis = true
+            }
+
+            // Fetch root text if different from parent
+            if let rootId = rootId, rootId != parentId {
+                let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
+                rootTaskText = rootTask?.text
+            }
+
+            // Fetch sibling position/count
+            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
+            siblingCount = siblings.count
+            siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+        }
+
+        // Update pointer with new text + existing metadata
+        CloudKitManager.shared.updateCurrentTaskPointer(
+            taskId: taskId,
+            text: newText,  // Updated text
+            parentId: parentId,
+            rootId: rootId,
+            parentTaskText: parentTaskText,
+            rootTaskText: rootTaskText,
+            showEllipsis: showEllipsis,
+            siblingPosition: siblingPosition,
+            siblingCount: siblingCount
+        ) { error in
+            if let error = error {
+                print("⚠️ [Task Update] Pointer update failed: \(error.localizedDescription)")
+            } else {
+                print("✅ [Task Update] CloudKit pointer updated with new text")
             }
         }
     }
