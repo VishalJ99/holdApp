@@ -186,33 +186,50 @@ class CloudKitManager {
 
     // Clear the current task pointer (for empty state or startup sync)
     func clearCurrentTaskPointer(completion: @escaping (Error?) -> Void) {
-        print("🗑️ [CloudKit] Clearing CurrentTaskPointer...")
+        let clearStartTime = Date()
+        print("🗑️ [CloudKit] Clearing CurrentTaskPointer at \(clearStartTime)")
 
-        let recordID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
-        let record = CKRecord(recordType: "CurrentTaskPointer", recordID: recordID)
+        let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
 
-        // Set all fields to nil/empty
-        record["currentTaskId"] = nil as String?
-        record["currentTaskText"] = nil as String?
-        record["parentId"] = nil as String?
-        record["rootId"] = nil as String?
-        record["parentTaskText"] = nil as String?
-        record["rootTaskText"] = nil as String?
-        record["showEllipsis"] = false
-        record["siblingPosition"] = nil as Int?
-        record["siblingCount"] = nil as Int?
-        record["timestamp"] = Date()
+        // Fetch existing pointer first (same pattern as updateCurrentTaskPointer)
+        database.fetch(withRecordID: pointerID) { [weak self] record, error in
+            guard let self = self else { return }
 
-        print("🔄 [CloudKit] Saving empty pointer record...")
+            if let existingRecord = record {
+                // Pointer exists - clear all fields
+                print("📝 [CloudKit] Found existing pointer, clearing fields...")
+                existingRecord["currentTaskId"] = nil as String?
+                existingRecord["currentTaskText"] = nil as String?
+                existingRecord["parentId"] = nil as String?
+                existingRecord["rootId"] = nil as String?
+                existingRecord["parentTaskText"] = nil as String?
+                existingRecord["rootTaskText"] = nil as String?
+                existingRecord["showEllipsis"] = false
+                existingRecord["siblingPosition"] = nil as Int?
+                existingRecord["siblingCount"] = nil as Int?
+                existingRecord["timestamp"] = Date() as CKRecordValue
 
-        database.save(record) { savedRecord, error in
-            if let error = error {
-                print("❌ [CloudKit] Clear pointer failed: \(error.localizedDescription)")
-                completion(error)
-            } else {
-                print("✅ [CloudKit] CurrentTaskPointer cleared successfully")
-                print("📱 [CloudKit] iPhone will now show '...' placeholder")
+                self.database.save(existingRecord) { savedRecord, saveError in
+                    let clearTime = Date().timeIntervalSince(clearStartTime)
+                    if let saveError = saveError {
+                        print("❌ [CloudKit] Clear pointer failed after \(String(format: "%.2f", clearTime))s: \(saveError.localizedDescription)")
+                        completion(saveError)
+                    } else {
+                        print("✅ [CloudKit] CurrentTaskPointer cleared in \(String(format: "%.2f", clearTime))s")
+                        print("📱 [CloudKit] iPhone will now show 'No current task'")
+                        completion(nil)
+                    }
+                }
+            } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
+                // Pointer doesn't exist - nothing to clear
+                let clearTime = Date().timeIntervalSince(clearStartTime)
+                print("ℹ️ [CloudKit] Pointer doesn't exist, nothing to clear (completed in \(String(format: "%.2f", clearTime))s)")
                 completion(nil)
+            } else {
+                // Unexpected error
+                let clearTime = Date().timeIntervalSince(clearStartTime)
+                print("❌ [CloudKit] Pointer fetch error after \(String(format: "%.2f", clearTime))s: \(error?.localizedDescription ?? "unknown")")
+                completion(error)
             }
         }
     }
