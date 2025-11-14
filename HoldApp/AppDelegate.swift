@@ -699,19 +699,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                             defer { dispatchGroup.leave() }
                             switch result {
                             case .success(let siblings):
-                                siblingCount = siblings.count + 1  // +1 for potential index lag
-                                if let position = siblings.firstIndex(where: { $0.id == taskId }) {
-                                    siblingPosition = position + 1  // 1-based
-                                    print("✅ [Root Switch] Sibling position: \(siblingPosition!)/\(siblingCount!)")
+                                // Use smart check pattern to handle index lag
+                                var allSiblings = siblings
+                                if !allSiblings.contains(where: { $0.id == taskId }) {
+                                    // Task not in list (index lag) - add it manually
+                                    allSiblings.append((id: taskId, text: text, timestamp: Date()))
                                 }
+                                siblingCount = allSiblings.count
+                                siblingPosition = allSiblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+                                print("✅ [Root Switch] Sibling position: \(siblingPosition ?? 0)/\(siblingCount ?? 0)")
                             case .failure(let error):
                                 print("⚠️ [Root Switch] Sibling fetch failed: \(error.localizedDescription)")
                             }
                         }
                     }
 
-                    // Fetch root task text if it exists
-                    if let rootId = rootIdFromRecord {
+                    // Fetch root task text if it exists and is different from parent
+                    if let rootId = rootIdFromRecord, rootId != parentId {
                         dispatchGroup.enter()
                         CloudKitManager.shared.fetchTaskById(rootId) { result in
                             defer { dispatchGroup.leave() }
