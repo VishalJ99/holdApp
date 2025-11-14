@@ -25,7 +25,7 @@ class LogManager {
         }
     }
 
-    func log(text: String, id: String, parentId: String?) {
+    func log(text: String, id: String, parentId: String?, rootId: String? = nil) {
         let timestamp = ISO8601DateFormatter().string(from: Date())
 
         var entry: [String: Any] = [
@@ -39,6 +39,13 @@ class LogManager {
             entry["parent_id"] = parentId
         } else {
             entry["parent_id"] = NSNull()
+        }
+
+        // Add root_id if provided (null for root tasks)
+        if let rootId = rootId {
+            entry["root_id"] = rootId
+        } else {
+            entry["root_id"] = NSNull()
         }
 
         // Read existing logs
