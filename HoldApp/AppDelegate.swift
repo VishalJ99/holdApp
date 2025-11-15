@@ -18,6 +18,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var rootSelectorViewController: RootSelectorViewController!
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
+    private var statusItem: NSStatusItem!
 
     // Nuke confirmation state
     private var nukeConfirmationPending: Bool = false
@@ -31,6 +32,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Initialize components
         logManager = LogManager()
+
+        // Setup menu bar
+        setupMenuBar()
 
         // Create Spotlight UI
         spotlightViewController = SpotlightViewController()
@@ -109,6 +113,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationSupportsSecureRestorableState(_ app: NSApplication) -> Bool {
         return true
+    }
+
+    // MARK: - Menu Bar Setup
+
+    private func setupMenuBar() {
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+
+        if let button = statusItem.button {
+            // Load custom icon from Assets.xcassets
+            if let icon = NSImage(named: "hold_icon") {
+                icon.size = NSSize(width: 44, height: 44)  // Testing full size
+                icon.isTemplate = true  // Adapts to light/dark mode
+                button.image = icon
+            }
+        }
+
+        // Create menu
+        let menu = NSMenu()
+
+        menu.addItem(NSMenuItem(
+            title: "Show Spotlight",
+            action: #selector(showSpotlightFromMenu),
+            keyEquivalent: ""
+        ))
+
+        menu.addItem(NSMenuItem.separator())
+
+        menu.addItem(NSMenuItem(
+            title: "Quit Hold",
+            action: #selector(NSApplication.terminate(_:)),
+            keyEquivalent: "q"
+        ))
+
+        statusItem.menu = menu
+    }
+
+    @objc private func showSpotlightFromMenu() {
+        spotlightPanel.show()
     }
 
     // MARK: - Task Creation
