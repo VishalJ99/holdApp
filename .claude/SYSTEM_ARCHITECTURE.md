@@ -21,7 +21,7 @@
   - Singleton managing `~/Library/Application Support/HoldApp/tasks.json`
   - All task CRUD operations happen locally (instant, no network lag)
   - Synchronous API - no callbacks, no DispatchGroups
-  - Functions: `saveTask()`, `fetchRoots()`, `fetchSiblings()`, `fetchTaskById()`, `fetchLatestInTree()`, `clearAllTasks()`
+  - Functions: `saveTask()`, `fetchRoots()`, `fetchSiblings()`, `fetchTaskById()`, `fetchLatestInTree()`, `clearAllTasks()`, `deleteTask()`, `hasChildren()`, `updateTaskText()`
 
 #### ❌ **Removed from CloudKit**
 - Task records - NO LONGER SAVED TO CLOUDKIT
@@ -76,8 +76,155 @@ Root/Sibling Selection:
 
 ### File Locations
 - **Local Storage**: `~/Library/Application Support/HoldApp/tasks.json`
-- **LocalTaskStore**: `HoldApp/LocalTaskStore.swift` (~160 lines)
+- **LocalTaskStore**: `HoldApp/LocalTaskStore.swift` (~240 lines)
 - **CloudKitManager**: `HoldApp/CloudKitManager.swift` (Task functions removed, CurrentTaskPointer kept)
+
+---
+
+## **MVP FEATURES: Task Management (November 2025)**
+
+### Overview
+After the local-first refactor, the following core task management features were implemented to complete the MVP.
+
+### 1. Task Dismissal (Cmd+Shift+D)
+
+**Purpose**: Remove tasks from the system with intelligent navigation fallback.
+
+**Key Components**:
+- `LocalTaskStore.deleteTask(id:)` - Hard delete from tasks.json
+- `LocalTaskStore.hasChildren(taskId:)` - Prevent dismissing parents
+- `AppDelegate.dismissCurrentTask()` - Navigation fallback algorithm
+- `HotkeyManager` - Cmd+Shift+D registration
+
+**Dismissal Rules**:
+- User can only dismiss leaf tasks (tasks with no children)
+- Hard delete from tasks.json (no soft delete, no logging)
+- Shows "Task cleared" notification on Mac only
+
+**Navigation Fallback Algorithm**:
+When a task is dismissed, the system navigates to the next task in this order:
+1. **Next sibling** (by creation time: timestamp > current.timestamp)
+2. **Parent** (if exists and not dismissing root)
+3. **Parent's next sibling** (if parent exists)
+4. **Next root** (first root with timestamp > current root's timestamp)
+5. **Any remaining root** (fall back to oldest root)
+6. **Clear state** (if no tasks left)
+
+**CloudKit Sync**: When last task is dismissed, calls `clearCurrentTaskPointer()` so iPhone shows "No current task"
+
+### 2. Startup State Synchronization
+
+**Purpose**: Ensure Mac's local storage state syncs with CloudKit pointer on app launch.
+
+**Key Components**:
+- `AppDelegate.initializeAppState()` - Called during `applicationDidFinishLaunching`
+- `CloudKitManager.clearCurrentTaskPointer()` - Clear pointer when no tasks exist
+
+**Startup Logic**:
+```
+Mac Launch:
+├─ Load all tasks from tasks.json
+├─ If empty:
+│  ├─ Clear CloudKit pointer
+│  ├─ Clear AppState
+│  └─ iPhone displays "No current task"
+└─ If has tasks:
+   ├─ Find latest root (by timestamp DESC)
+   ├─ Find latest task in that tree
+   ├─ Update AppState with that task
+   └─ Sync to CloudKit pointer (iPhone displays latest task)
+```
+
+**Bug Fixed**: Mac never synced local storage with CloudKit on startup, causing iPhone to show stale tasks when tasks.json was cleared.
+
+### 3. Edit Mode (Up Arrow + Enter)
+
+**Purpose**: Allow users to edit the currently displayed task text.
+
+**Key Components**:
+- `SpotlightViewController` - Edit mode state tracking
+- `LocalTaskStore.updateTaskText(id:newText:)` - Update task in storage
+- `AppDelegate.handleTaskUpdate()` - Update handler
+- `TaskInputUI.onTaskUpdate` callback - Protocol extension
+
+**User Flow**:
+```
+User: Press Up Arrow
+├─ SpotlightViewController.loadCurrentTask()
+├─ Pre-fills text field with current task text
+├─ Sets isEditMode = true, editingTaskId = current.id
+└─ Placeholder: "Editing task... (Press Enter to save)"
+
+User: Press Enter (plain, no modifiers)
+├─ SpotlightViewController.handleSubmit()
+├─ Detects edit mode → calls onTaskUpdate callback
+├─ AppDelegate.handleTaskUpdate()
+├─ LocalTaskStore.updateTaskText() - SAME task ID, new text
+├─ Update AppState with new text
+├─ Update CloudKit pointer with new text
+└─ iPhone syncs and displays updated text
+```
+
+**Edit Mode Restrictions**:
+- Modifiers (Cmd/Shift/Ctrl) disabled in edit mode
+- Shows warning toast if user tries to use modifiers
+- Plain Enter = update existing task (NOT create new task)
+- Edit mode resets on Escape or after successful update
+
+**Implementation Detail**:
+- Edit preserves task ID (overwrites text of same task)
+- Create generates new task ID (new task in hierarchy)
+
+### 4. Nuke Button (Cmd+Shift+Backspace)
+
+**Purpose**: Wipe all tasks for a fresh start (safety feature for testing/reset).
+
+**Key Components**:
+- `AppDelegate.handleNuke()` - Two-press confirmation pattern
+- `HotkeyManager` - Cmd+Shift+Backspace registration
+- Confirmation state: `nukeConfirmationPending`, `nukeConfirmationTimer`
+
+**User Flow**:
+```
+User: Press Cmd+Shift+Backspace (first time)
+├─ Set nukeConfirmationPending = true
+├─ Start 3-second timer
+└─ Toast: "⚠️ Press again to confirm nuke"
+
+[If 3 seconds pass]
+└─ Timer fires → Reset nukeConfirmationPending = false
+
+User: Press Cmd+Shift+Backspace (second time, within 3 seconds)
+├─ Detect nukeConfirmationPending = true
+├─ Clear tasks.json → LocalTaskStore.clearAllTasks()
+├─ Clear AppState → AppState.shared.clearCurrent()
+├─ Clear CloudKit pointer → clearCurrentTaskPointer()
+├─ Preserve logs.json (keep history)
+└─ Toast: "💣 All tasks nuked - fresh state"
+```
+
+**Safety Pattern**: Two-press confirmation prevents accidental data loss
+
+**What Gets Nuked**:
+- ✅ tasks.json (all task data)
+- ✅ AppState (current task reference)
+- ✅ CloudKit pointer (iPhone updates to "No current task")
+- ❌ logs.json (preserved for history/debugging)
+
+### 5. CloudKit Pointer Management
+
+**Key Components**:
+- `CloudKitManager.clearCurrentTaskPointer()` - Clear pointer fields
+- `CloudKitManager.updateCurrentTaskPointer()` - Update pointer fields
+
+**clearCurrentTaskPointer() Implementation**:
+- **Fetch-before-update pattern** (same as updateCurrentTaskPointer)
+- Fetches existing pointer record by ID "CURRENT_TASK_POINTER"
+- Sets all fields to nil/false
+- Updates timestamp
+- If record doesn't exist (.unknownItem), does nothing
+
+**Bug Fixed**: Original implementation tried to create new record, causing "record to insert already exists" error. Now uses fetch-before-update pattern.
 
 ---
 
@@ -122,13 +269,18 @@ Root/Sibling Selection:
 #### Key Components:
 
 **`AppDelegate.swift`** (`HoldApp/AppDelegate.swift`)
-- **Responsibility**: App lifecycle, component initialization, task creation orchestration, sibling selection
+- **Responsibility**: App lifecycle, component initialization, task creation orchestration, sibling selection, task dismissal, edit mode, nuke functionality
 - **Key Logic**:
-  - Initializes Spotlight UI, Sibling Selector UI, hotkey manager, and LogManager
+  - Initializes Spotlight UI, Sibling Selector UI, Root Selector UI, hotkey manager, and LogManager
+  - Calls `initializeAppState()` on launch to sync local storage with CloudKit
   - Handles `onTaskSubmit` callback with modifier key detection
   - Implements 5 task creation handlers (top-level, child, sibling with variations)
   - Implements sibling selection workflow (Cmd+Shift+S)
-  - Coordinates between UI (SpotlightViewController, SiblingSelectorViewController), state (AppState), and data layer (CloudKitManager)
+  - Implements root selection workflow (Cmd+Shift+R)
+  - Implements task dismissal with navigation fallback (Cmd+Shift+D)
+  - Implements edit mode task updates (Up arrow + Enter)
+  - Implements nuke functionality with two-press confirmation (Cmd+Shift+Backspace)
+  - Coordinates between UI (SpotlightViewController, SiblingSelectorViewController, RootSelectorViewController), state (AppState), and data layer (LocalTaskStore, CloudKitManager)
 - **Task Creation Methods** (lines 58-384):
   - `handleTaskCreation()`: Routes based on TaskCreationType
   - `createTopLevelTask()`: Creates root task with optional switch
@@ -154,34 +306,75 @@ Root/Sibling Selection:
   - `showSiblingSelector()`: Validates current task has parent, fetches siblings, displays panel
   - `handleSiblingSelection()`: Updates CurrentTaskPointer with selected sibling, fetches all display metadata
     - Follows same DispatchGroup pattern as task creation for metadata fetching
-- **Error Handling**: Shows toasts for missing current task references, no parent errors, fetch failures
+- **Root Selection Methods** (lines 609-759):
+  - `showRootSelector()`: Fetches all roots, displays panel with current root highlighted
+  - `handleRootSelection()`: Switches to latest task in selected root's tree, updates pointer
+- **Startup Initialization** (lines 795-911):
+  - `initializeAppState()`: Called on app launch
+    - If tasks.json empty → clear CloudKit pointer → iPhone shows "No current task"
+    - If tasks.json has data → load latest root's deepest task → sync to pointer
+    - Fixes bug where iPhone showed stale tasks after Mac's local storage was cleared
+- **Task Dismissal** (lines 630-792):
+  - `dismissCurrentTask()`: Deletes current task with navigation fallback
+    - Validates task is a leaf (no children)
+    - Navigation order: next sibling → parent → parent siblings → next root → clear
+    - Calls `clearCurrentTaskPointer()` when last task is dismissed
+    - Shows "Task cleared" notification on Mac
+- **Edit Mode** (lines 915-999):
+  - `handleTaskUpdate(taskId:newText:)`: Updates task text in storage and AppState
+    - Calls `LocalTaskStore.updateTaskText()` to overwrite text (same task ID)
+    - Updates CloudKit pointer with new text if this is the current task
+    - Resets edit mode and shows success toast
+  - `updateCurrentTaskPointerAfterEdit()`: Helper to sync pointer after edit
+- **Nuke Functionality** (lines 1006-1047):
+  - `handleNuke()`: Two-press confirmation pattern
+    - First press: Set `nukeConfirmationPending = true`, start 3-second timer, show warning
+    - Second press (within 3 seconds): Clear tasks.json, AppState, CloudKit pointer
+    - Timer timeout: Reset confirmation state
+    - Preserves logs.json (keeps history)
+- **Error Handling**: Shows toasts for missing current task references, no parent errors, fetch failures, edit mode modifier violations
 
 **`HotkeyManager.swift`** (`HoldApp/HotkeyManager.swift`)
 - **Responsibility**: Global keyboard shortcut registration
 - **Key Logic**:
   - Uses Carbon API to register system-wide hotkeys
-  - Triggers callbacks for Spotlight panel, Sibling Selector, and Root Selector
+  - Triggers callbacks for Spotlight panel, Sibling Selector, Root Selector, Dismiss, and Nuke
   - Registered hotkeys:
     - Cmd+Shift+Space (ID 1): Show Spotlight panel
     - Cmd+Shift+S (ID 3): Show Sibling Selector panel
     - Cmd+Shift+R (ID 4): Show Root Selector panel
+    - Cmd+Shift+D (ID 5): Dismiss current task
+    - Cmd+Shift+Backspace (ID 6): Nuke all tasks (two-press confirmation)
   - Note: Escape (ID 2) was removed - now handled locally by each panel
 
 **`SpotlightViewController.swift`** (`HoldApp/SpotlightViewController.swift`)
-- **Responsibility**: The capture bar UI (text field, modifier key detection)
+- **Responsibility**: The capture bar UI (text field, modifier key detection, edit mode)
 - **Conforms to**: TaskInputUI protocol
 - **Key Logic**:
   - NSViewController with single SubmitTextField instance
+  - **Edit Mode State** (lines 7-10):
+    - `isEditMode: Bool` - Tracks whether user is editing existing task
+    - `editingTaskId: String?` - ID of task being edited
   - **Modifier Detection** (lines 61-92): `handleSubmit()` detects Control, Shift, Cmd keys
-  - **Arrow Handlers** (lines 96-110): Up = load current task, Down = clear text
+    - If `isEditMode = true`: Disables modifiers, plain Enter updates task
+    - If `isEditMode = false`: Normal task creation with modifiers
+  - **Arrow Handlers** (lines 96-110):
+    - Up = load current task into edit mode (`loadCurrentTask()`)
+    - Down = clear text
+  - **Edit Mode Methods**:
+    - `loadCurrentTask()`: Pre-fills text, sets edit mode state, changes placeholder
+    - `resetEditMode()`: Clears edit state, resets placeholder
   - Handles Escape key → fires `onCancel` callback
-  - Placeholder text: "What task are you holding?"
-- **Modifier Key Mappings**:
+  - Placeholder text: "What task are you holding?" (create mode) or "Editing task... (Press Enter to save)" (edit mode)
+- **Modifier Key Mappings** (Create Mode):
   - Enter → topLevel
   - **Ctrl+Enter** → topLevelAndSwitch
   - Shift+Enter → child
   - Cmd+Enter → sibling
   - **Cmd+Ctrl+Enter** → siblingAndSwitch
+- **Edit Mode Behavior**:
+  - Plain Enter → Update task (calls `onTaskUpdate` callback)
+  - Any modifier + Enter → Show warning toast, block action
 
 **`SubmitTextField.swift`** (`HoldApp/SubmitTextField.swift`) - NEW
 - **Responsibility**: Custom NSTextField subclass for intercepting Enter key with modifiers
@@ -208,10 +401,45 @@ Root/Sibling Selection:
   - JSON format: `{"timestamp": "...", "text": "...", "id": "...", "parent_id": "..." or null}`
   - Used for debugging and backup (CloudKit is primary source of truth)
 
+**`LocalTaskStore.swift`** (`HoldApp/LocalTaskStore.swift`)
+- **Responsibility**: Local-first task storage - manages tasks.json file
+- **Status**: ✅ CORE COMPONENT - All task data stored locally
+- **File Location**: `~/Library/Application Support/HoldApp/tasks.json`
+- **Key Logic**:
+  - Singleton pattern (`LocalTaskStore.shared`)
+  - Synchronous API (no callbacks, no async)
+  - Atomic file writes (write to temp file, then rename)
+  - All CRUD operations happen instantly (no network lag)
+- **Core Methods**:
+  - `saveTask()` - Add new task to storage
+  - `fetchAllTasks()` - Load all tasks from file
+  - `fetchRoots()` - Get all top-level tasks (no parent_id)
+  - `fetchSiblings(parentId:)` - Get all tasks with same parent
+  - `fetchTaskById(id:)` - Get specific task by UUID
+  - `fetchLatestInTree(rootId:)` - Get newest task in tree
+  - `clearAllTasks()` - Delete all tasks (nuke functionality)
+- **Task Management Methods** (Added in MVP features):
+  - `deleteTask(id:) -> Bool` - Hard delete task from storage (dismiss feature)
+    - Returns false if task not found
+    - Permanently removes task from tasks.json
+    - No soft delete, no logging
+  - `hasChildren(taskId:) -> Bool` - Check if task has child tasks (dismiss validation)
+    - Returns true if any task has this task as parent_id
+    - Used to prevent dismissing parent tasks (must dismiss leaves only)
+  - `updateTaskText(id:newText:) -> Bool` - Update task text (edit mode)
+    - Finds task by ID, updates text field only
+    - Preserves all other fields (id, timestamp, parent_id, root_id, isCompleted)
+    - Returns false if task not found
+    - Used by edit mode to overwrite existing task text
+
 **`TaskInputUI.swift`** (`HoldApp/TaskInputUI.swift`) - NEW
 - **Responsibility**: Protocol defining task input interface contract
 - **Purpose**: Allows hotswapping different spotlight implementations
-- **Defines**: `show()`, `hide()`, `isVisible`, callbacks for task submission and cancellation
+- **Defines**: `show()`, `hide()`, `isVisible`, callbacks for task submission, cancellation, and updates
+- **Callbacks**:
+  - `onTaskSubmit: ((String, TaskCreationType) -> Void)?` - Task creation
+  - `onCancel: (() -> Void)?` - Cancel/Escape
+  - `onTaskUpdate: ((String, String) -> Void)?` - Edit mode task update (taskId, newText)
 - **TaskCreationType enum**: Defines 5 task creation types based on modifier keys
 
 **`AppState.swift`** (`HoldApp/AppState.swift`) - NEW
@@ -422,9 +650,20 @@ Root/Sibling Selection:
     - `siblingPosition` - Position among siblings
     - `siblingCount` - Total sibling count
     - `timestamp` - Update time
-  - **Called from**: Mac AppDelegate when task becomes current (Ctrl+Enter, Shift+Enter, Cmd+Ctrl+Enter) AND sibling selection
+  - **Called from**: Mac AppDelegate when task becomes current (Ctrl+Enter, Shift+Enter, Cmd+Ctrl+Enter) AND sibling selection AND edit mode update
   - **Logs**: Pointer update/creation duration, all fields, "Pointer Summary"
   - **Purpose**: Enable instant iPhone sync without query index lag, provide complete display info in one fetch
+
+  **`clearCurrentTaskPointer()` (Lines 187-235)**:
+  - **Purpose**: Clear pointer when no tasks remain (Mac startup sync, dismiss last task, nuke)
+  - **Implementation**: Fetch-before-update pattern (same as updateCurrentTaskPointer)
+  - **Process**:
+    1. Fetch existing pointer record by ID "CURRENT_TASK_POINTER"
+    2. If exists: Set all fields to nil/false, update timestamp, save
+    3. If doesn't exist (.unknownItem error): Do nothing (already clear)
+  - **Called from**: Mac AppDelegate during `initializeAppState()`, `dismissCurrentTask()` (last task), `handleNuke()`
+  - **Logs**: Fetch duration, clear operation success/failure
+  - **Bug Fixed**: Original implementation tried to create new record, causing "record to insert already exists" error. Now fetches existing record and updates fields to nil.
 
   **`fetchSiblings()` (Lines 256-285)**:
   - Queries CloudKit for all tasks with matching `parent_id`
@@ -1447,6 +1686,73 @@ Event Layer                  What Gets Handled                   Modifier Behavi
 6. Updates `CurrentTaskPointer` with all display info (parent/root texts, ellipsis, sibling position)
 7. Updates AppState and shows success toast
 
+### 9. Task Dismissal (Mac)
+**File**: `HoldApp/AppDelegate.swift`
+**Lines**: 630-792
+**Trigger**: User presses Cmd+Shift+D
+**Action**:
+1. Validates current task exists
+2. Checks task is a leaf (no children) via `LocalTaskStore.shared.hasChildren()`
+3. Deletes task via `LocalTaskStore.shared.deleteTask(id:)`
+4. Navigation fallback algorithm:
+   - Try next sibling (by timestamp)
+   - Try parent
+   - Try parent's next sibling
+   - Try next root
+   - Try any remaining root
+   - Clear state if no tasks left
+5. Update AppState and CloudKit pointer
+6. If last task dismissed, calls `clearCurrentTaskPointer()`
+7. Shows "Task cleared" toast
+
+### 10. Edit Mode (Mac)
+**File**: `HoldApp/SpotlightViewController.swift` + `HoldApp/AppDelegate.swift`
+**Lines**: SpotlightViewController: 121-137, AppDelegate: 915-999
+**Trigger**: User presses Up arrow, edits text, presses Enter
+**Action**:
+1. `SpotlightViewController.loadCurrentTask()` - Pre-fill text, set edit mode
+2. User edits text and presses plain Enter
+3. `handleSubmit()` detects edit mode, calls `onTaskUpdate` callback
+4. `AppDelegate.handleTaskUpdate()` receives callback
+5. `LocalTaskStore.updateTaskText()` - Overwrite task text (same ID)
+6. Update AppState with new text
+7. Update CloudKit pointer with new text via `updateCurrentTaskPointer()`
+8. Reset edit mode, show success toast
+9. iPhone syncs and displays updated task
+
+### 11. Startup State Sync (Mac)
+**File**: `HoldApp/AppDelegate.swift`
+**Lines**: 795-911
+**Trigger**: Mac app launches (`applicationDidFinishLaunching`)
+**Action**:
+1. `initializeAppState()` called
+2. Load all tasks from `LocalTaskStore.fetchAllTasks()`
+3. If tasks.json empty:
+   - Call `clearCurrentTaskPointer()` to clear stale pointer
+   - Clear AppState
+   - iPhone displays "No current task"
+4. If tasks.json has tasks:
+   - Fetch latest root (by timestamp DESC)
+   - Fetch latest task in that tree via `fetchLatestInTree()`
+   - Update AppState with latest task
+   - Update CloudKit pointer with all metadata
+   - iPhone syncs and displays latest task
+
+### 12. Nuke All Tasks (Mac)
+**File**: `HoldApp/AppDelegate.swift`
+**Lines**: 1006-1047
+**Trigger**: User presses Cmd+Shift+Backspace twice (within 3 seconds)
+**Action**:
+1. First press: Set `nukeConfirmationPending = true`, start timer, show warning
+2. Timer expires after 3 seconds: Reset confirmation state
+3. Second press (within timeout):
+   - Clear tasks.json via `LocalTaskStore.clearAllTasks()`
+   - Clear AppState via `AppState.shared.clearCurrent()`
+   - Clear CloudKit pointer via `clearCurrentTaskPointer()`
+   - Preserve logs.json (keep history)
+   - Show success toast "💣 All tasks nuked"
+4. iPhone receives pointer update, displays "No current task"
+
 
 
 ---
@@ -1507,23 +1813,55 @@ Do NOT allow:
 **Fix**: Now writes to `~/Library/Application Support/HoldApp/logs.json`
 **Impact**: Backup logging now works correctly
 
-### 3. Subscription Activation Delay
+### 3. clearCurrentTaskPointer "record to insert already exists" Error
+**Status**: ✅ FIXED (2025-11-14)
+**Issue**: `clearCurrentTaskPointer()` tried to create new record instead of updating existing one
+**Root Cause**: Original implementation used `CKRecord(recordType:recordID:)` which signals INSERT operation
+**Error Message**: "Error saving record... to server: record to insert already exists"
+**Fix**: Changed to fetch-before-update pattern:
+  1. Fetch existing pointer by ID "CURRENT_TASK_POINTER"
+  2. If exists: Update fields to nil/false and save (UPDATE operation)
+  3. If doesn't exist (.unknownItem): Do nothing
+**Impact**: Mac startup sync now works correctly, can clear pointer when tasks.json is empty
+**Location**: CloudKitManager.swift:187-235
+
+### 4. Stale Pointer After Dismissing Last Task
+**Status**: ✅ FIXED (2025-11-14)
+**Issue**: When dismissing last task, iPhone continued showing old task instead of "No current task"
+**Root Cause**: `dismissCurrentTask()` cleared AppState but didn't clear CloudKit pointer
+**Fix**: Added `clearCurrentTaskPointer()` call in final fallback case when no tasks remain
+**Impact**: iPhone now correctly updates to "No current task" when last task is dismissed
+**Location**: AppDelegate.swift:728-742
+
+### 5. No Startup State Synchronization
+**Status**: ✅ FIXED (2025-11-14)
+**Issue**: Mac never synced local storage state with CloudKit pointer on app launch
+**Impact**: iPhone showed stale tasks after Mac's tasks.json was cleared
+**Fix**: Added `initializeAppState()` method called during `applicationDidFinishLaunching`
+  - If tasks.json empty → clear CloudKit pointer
+  - If tasks.json has data → load latest task and sync to pointer
+**Impact**: Mac and iPhone now stay in sync after app restart
+**Location**: AppDelegate.swift:795-911
+
+### 6. Subscription Activation Delay
 **Status**: ⚠️ KNOWN LIMITATION
 **Issue**: First-time subscription takes 5-15 minutes to activate
 **Impact**: Push notifications don't work immediately on first install
 **Workaround**: Wait or use polling fallback in DEBUG builds
 **Fix**: None (Apple's CloudKit limitation in development)
 
-### 4. No Task Completion
+### 7. No Task Completion
 **Status**: 📝 FUTURE FEATURE
 **Issue**: Tasks are never marked as `isCompleted = true`
-**Impact**: All tasks persist in CloudKit indefinitely
+**Impact**: All tasks persist in local storage and CloudKit indefinitely
+**Current**: Dismiss feature (Cmd+Shift+D) provides deletion capability
 **Future**: Add swipe gesture on iPhone to mark complete, cleanup old tasks
 
-### 5. No Multi-Task Support
+### 8. No Multi-Task Support
 **Status**: 📝 FUTURE FEATURE
 **Issue**: Only shows one task at a time
 **Impact**: Can't queue or reorder tasks
+**Current**: Root selector (Cmd+Shift+R) and sibling selector (Cmd+Shift+S) provide navigation
 **Future**: Add task list with arrow keys (Mac) or swipe (iPhone)
 
 ---
@@ -1608,5 +1946,5 @@ HoldApp/
 
 **Document Location**: `/Users/vishaljain/xcode_projects/HoldApp/.claude/SYSTEM_ARCHITECTURE.md`
 
-**Last Updated**: 2025-11-13
-**Version**: 1.3 (Updated CloudKit schema documentation - expanded CurrentTaskPointer to 10 fields, documented hierarchy display metadata calculation, updated ContentView/CloudKitManager/AppDelegate documentation to reflect Phase 1-6 implementation)
+**Last Updated**: 2025-11-14
+**Version**: 1.4 (MVP Features: Added comprehensive documentation for task dismissal (Cmd+Shift+D), startup state sync, clearCurrentTaskPointer fix, edit mode (Up arrow + Enter), nuke button (Cmd+Shift+Backspace), LocalTaskStore task management methods, updated all component descriptions, added 5 new critical code paths, documented 3 bug fixes)

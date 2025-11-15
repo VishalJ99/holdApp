@@ -24,6 +24,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var nukeConfirmationTimer: Timer?
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Close the default storyboard window (LSUIElement app doesn't need main window)
+        for window in NSApplication.shared.windows {
+            window.close()
+        }
+
         // Initialize components
         logManager = LogManager()
 
