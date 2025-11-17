@@ -315,6 +315,92 @@ HotkeyManager.registerHotkeys() → Loads from preferences → RegisterEventHotK
 - Existing users see no change unless they open Preferences
 - UserDefaults approach allows seamless upgrades
 
+### 7. Customizable Spotlight Entry Modifiers
+
+**Purpose**: Allow users to customize the 3 modifier keys that control task creation behavior when pressing Enter in Spotlight.
+
+**Key Components**:
+- `EntryModifierPreferences.swift` - Data model and UserDefaults manager
+- `EntryModifierViewController.swift` - Dropdown-based UI for modifier selection
+- `SpotlightViewController.swift` - Compositional modifier logic
+- `PreferencesWindowController.swift` - Tabbed interface ("Global Hotkeys" + "Entry Modifiers")
+
+**The 3 Independent Modifiers**:
+1. **Child Modifier** (default: Shift) - Create child of current task (auto-switches, going deeper)
+2. **Sibling Modifier** (default: Cmd) - Create sibling of current task
+3. **Switch Modifier** (default: Ctrl) - Switch to newly created task
+
+**Compositional Logic**:
+These 3 modifiers compose into 5 meaningful combinations:
+- **Enter** → Create top-level task, no switch
+- **Shift+Enter** → Create child + auto-switch (child always switches)
+- **Cmd+Enter** → Create sibling, no switch
+- **Ctrl+Enter** → Create top-level + switch
+- **Cmd+Ctrl+Enter** → Create sibling + switch
+
+**Key Insight**: Child modifier always implies switch because you're going deeper into the task tree, so there's no "child without switch" combination.
+
+**Data Storage**:
+- UserDefaults key: `com.holdapp.entryModifiers`
+- Format: JSON with 3 `ModifierFlags` (Codable wrapper for NSEvent.ModifierFlags)
+- Falls back to defaults if not found or corrupted
+
+**Architecture Flow**:
+```
+User opens Preferences → "Entry Modifiers" tab
+User selects modifier from dropdown (Shift/Cmd/Ctrl)
+Validation → Check for duplicates (can't assign same modifier to 2 actions)
+User clicks Save → EntryModifierPreferencesManager.saveModifiers() → UserDefaults
+NotificationCenter posts .entryModifierPreferencesChanged
+SpotlightViewController observer → Reloads preferences
+Next Enter press → Compositional logic checks which modifiers pressed
+Determines creation type based on combination
+```
+
+**Implementation Details**:
+
+1. **Compositional Modifier Detection** (`SpotlightViewController.swift:125-150`):
+   - Loads preferences on each submit
+   - Checks `.contains()` for each of the 3 configured modifiers
+   - Priority: Child > Sibling+Switch > Sibling > Switch > Top-level
+   - Maps to existing `TaskCreationType` enum (no enum changes needed)
+
+2. **Dropdown UI** (`EntryModifierViewController.swift`):
+   - 3 rows with labels + dropdowns ("Enter + Shift", "Enter + Cmd", "Enter + Ctrl")
+   - Dropdown options: Shift, Cmd, Ctrl only
+   - Real-time validation on change (duplicate detection)
+   - Save/Cancel/Restore Defaults buttons
+   - Instruction text explains all used with Enter key
+
+3. **Tabbed Preferences** (`PreferencesWindowController.swift:29-48`):
+   - NSTabViewController with toolbar-style tabs
+   - "Global Hotkeys" tab (existing HotkeyRecorderViewController)
+   - "Entry Modifiers" tab (new EntryModifierViewController)
+   - System icons: keyboard for hotkeys, return for modifiers
+
+4. **Validation** (`EntryModifierPreferences.swift:108-134`):
+   - No Option key (macOS text input limitation - same as global hotkeys)
+   - No duplicates (can't assign same modifier to multiple actions)
+   - Returns clear error messages for UI display
+
+**Valid Modifier Keys** (same constraints as global hotkeys):
+- ✅ Command (⌘) - `.command`
+- ✅ Shift (⇧) - `.shift`
+- ✅ Control (⌃) - `.control`
+- ❌ Option (⌥) - **NOT supported** (text input system intercepts)
+
+**File Locations**:
+- **Data Model**: `HoldApp/EntryModifierPreferences.swift` (~155 lines)
+- **UI Controller**: `HoldApp/EntryModifierViewController.swift` (~285 lines)
+- **Logic Integration**: `HoldApp/SpotlightViewController.swift` (modified compositional logic)
+- **Window Controller**: `HoldApp/PreferencesWindowController.swift` (modified for tabs)
+
+**Backwards Compatibility**:
+- Default values match previous hardcoded behavior (Shift/Cmd/Ctrl)
+- Existing users see no change unless they customize
+- Compositional logic supports all existing combinations
+- No TaskCreationType enum changes required
+
 ---
 
 ## High-Level Architecture
@@ -1964,9 +2050,11 @@ HoldApp/
 │   ├── HotkeyManager.swift           # ✅ REFACTORED - Config-driven global keyboard shortcuts (reads from UserDefaults)
 │   ├── HotkeyPreferences.swift       # 🆕 Hotkey data model, UserDefaults manager, validation
 │   ├── KeyCodeHelper.swift           # 🆕 Key code ↔ string conversion utilities
-│   ├── PreferencesWindowController.swift # 🆕 Preferences window lifecycle management
+│   ├── EntryModifierPreferences.swift # 🆕 Entry modifier data model, UserDefaults manager, validation
+│   ├── PreferencesWindowController.swift # ✅ REFACTORED - Tabbed preferences (Global Hotkeys + Entry Modifiers)
 │   ├── HotkeyRecorderViewController.swift # 🆕 Hotkey customization UI (table view, recording mode)
-│   ├── SpotlightViewController.swift # Capture bar UI (text field)
+│   ├── EntryModifierViewController.swift # 🆕 Entry modifier UI (dropdown selection, 3 modifiers)
+│   ├── SpotlightViewController.swift # ✅ REFACTORED - Compositional modifier logic (config-driven)
 │   ├── SpotlightPanel.swift          # Floating window container for Spotlight
 │   ├── SiblingSelectorViewController.swift # Sibling task list UI (Cmd+Shift+S)
 │   ├── SiblingSelectorPanel.swift    # Floating window container for sibling selector

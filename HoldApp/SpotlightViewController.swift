@@ -19,6 +19,40 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         return view.window?.isVisible ?? false
     }
 
+    // MARK: - Lifecycle
+
+    override init(nibName nibNameOrNil: NSNib.Name?, bundle nibBundleOrNil: Bundle?) {
+        super.init(nibName: nibNameOrNil, bundle: nibBundleOrNil)
+
+        // Listen for entry modifier preference changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reloadModifierPreferences),
+            name: .entryModifierPreferencesChanged,
+            object: nil
+        )
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+
+        // Listen for entry modifier preference changes
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(reloadModifierPreferences),
+            name: .entryModifierPreferencesChanged,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func reloadModifierPreferences() {
+        // No action needed - preferences are loaded on each submit
+    }
+
     func show() {
         // Handled by SpotlightPanel
     }
@@ -88,27 +122,30 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             return
         }
 
-        // NORMAL MODE: Detect which modifier keys are pressed
-        let controlPressed = modifiers.contains(.control)
-        let shiftPressed = modifiers.contains(.shift)
-        let commandPressed = modifiers.contains(.command)
+        // NORMAL MODE: Load modifier preferences and detect which are pressed
+        let prefs = EntryModifierPreferencesManager.shared.loadModifiers()
 
-        // Determine task creation type based on modifier combination
+        let isChildPressed = modifiers.contains(prefs.childModifier.nsEventFlags)
+        let isSiblingPressed = modifiers.contains(prefs.siblingModifier.nsEventFlags)
+        let isSwitchPressed = modifiers.contains(prefs.switchModifier.nsEventFlags)
+
+        // Determine task creation type using compositional logic
+        // Child modifier always implies switch (going deeper in tree)
         let creationType: TaskCreationType
-        if commandPressed && controlPressed {
-            // Cmd+Ctrl+Enter - sibling and switch
-            creationType = .siblingAndSwitch
-        } else if commandPressed {
-            // Cmd+Enter - sibling
-            creationType = .sibling
-        } else if shiftPressed {
-            // Shift+Enter - child
+        if isChildPressed {
+            // Child modifier - create child and auto-switch
             creationType = .child
-        } else if controlPressed {
-            // Ctrl+Enter - top-level and switch
+        } else if isSiblingPressed && isSwitchPressed {
+            // Sibling + switch modifiers - create sibling and switch to it
+            creationType = .siblingAndSwitch
+        } else if isSiblingPressed {
+            // Sibling modifier only - create sibling without switching
+            creationType = .sibling
+        } else if isSwitchPressed {
+            // Switch modifier only - create top-level and switch to it
             creationType = .topLevelAndSwitch
         } else {
-            // Enter - top-level
+            // No modifiers - create top-level without switching
             creationType = .topLevel
         }
 

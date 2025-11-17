@@ -26,7 +26,7 @@ struct ContentView: View {
                 ProgressView()
                     .tint(.white)
             } else if currentTask == nil {
-                Text("No current task")
+                Text("what are you holding?")
                     .font(.largeTitle)
                     .foregroundColor(.gray)
             } else {
