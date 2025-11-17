@@ -20,10 +20,13 @@ class HotkeyManager {
     }
 
     func registerHotkeys() {
-        // Register Command+Shift+Space to show
+        // Load hotkey preferences (defaults to current hardcoded values if not customized)
+        let prefs = HotkeyPreferencesManager.shared.loadHotkeys()
+
+        // Register Show Spotlight hotkey
         registerHotkey(
-            keyCode: UInt32(kVK_Space),
-            modifiers: UInt32(cmdKey | shiftKey),
+            keyCode: prefs.showSpotlight.keyCode,
+            modifiers: prefs.showSpotlight.modifiers,
             hotkeyId: 1,
             hotkeyRef: &showHotKeyRef
         )
@@ -31,34 +34,34 @@ class HotkeyManager {
         // NOTE: Escape is NOT registered globally - each panel handles it locally in keyDown()
         // This allows Escape to work context-aware (dismiss spotlight OR sibling selector)
 
-        // Register Command+Shift+S to show sibling selector
+        // Register Sibling Selector hotkey
         registerHotkey(
-            keyCode: UInt32(kVK_ANSI_S),
-            modifiers: UInt32(cmdKey | shiftKey),
+            keyCode: prefs.siblingSelector.keyCode,
+            modifiers: prefs.siblingSelector.modifiers,
             hotkeyId: 3,
             hotkeyRef: &siblingSelectorHotKeyRef
         )
 
-        // Register Command+Shift+R to show root selector
+        // Register Root Selector hotkey
         registerHotkey(
-            keyCode: UInt32(kVK_ANSI_R),
-            modifiers: UInt32(cmdKey | shiftKey),
+            keyCode: prefs.rootSelector.keyCode,
+            modifiers: prefs.rootSelector.modifiers,
             hotkeyId: 4,
             hotkeyRef: &rootSelectorHotKeyRef
         )
 
-        // Register Command+Shift+D to dismiss current task
+        // Register Dismiss Task hotkey
         registerHotkey(
-            keyCode: UInt32(kVK_ANSI_D),
-            modifiers: UInt32(cmdKey | shiftKey),
+            keyCode: prefs.dismissTask.keyCode,
+            modifiers: prefs.dismissTask.modifiers,
             hotkeyId: 5,
             hotkeyRef: &dismissHotKeyRef
         )
 
-        // Register Command+Shift+Backspace to nuke all tasks
+        // Register Nuke All Tasks hotkey
         registerHotkey(
-            keyCode: UInt32(kVK_Delete),
-            modifiers: UInt32(cmdKey | shiftKey),
+            keyCode: prefs.nukeAllTasks.keyCode,
+            modifiers: prefs.nukeAllTasks.modifiers,
             hotkeyId: 6,
             hotkeyRef: &nukeHotKeyRef
         )
@@ -91,7 +94,16 @@ class HotkeyManager {
 
     private func registerHotkey(keyCode: UInt32, modifiers: UInt32, hotkeyId: UInt32, hotkeyRef: inout EventHotKeyRef?) {
         var hotkeyID = EventHotKeyID(signature: OSType(0x484B4559), id: hotkeyId) // 'HKEY'
-        RegisterEventHotKey(keyCode, modifiers, hotkeyID, GetApplicationEventTarget(), 0, &hotkeyRef)
+        let status = RegisterEventHotKey(keyCode, modifiers, hotkeyID, GetApplicationEventTarget(), 0, &hotkeyRef)
+
+        if status != noErr {
+            let hotkeyString = KeyCodeHelper.formatHotkey(keyCode: keyCode, modifiers: modifiers)
+            print("⚠️ Failed to register hotkey \(hotkeyString) (ID: \(hotkeyId)). Status: \(status)")
+            print("   This hotkey may be in use by another application.")
+
+            // Note: We don't crash - the app continues to work, just without this specific hotkey
+            // User will need to choose a different hotkey combination in Preferences
+        }
     }
 
     func unregisterHotkeys() {
@@ -119,5 +131,12 @@ class HotkeyManager {
             RemoveEventHandler(handler)
             eventHandler = nil
         }
+    }
+
+    /// Reload hotkeys from preferences (unregister old, register new)
+    /// Called when user changes hotkey preferences
+    func reloadHotkeys() {
+        unregisterHotkeys()
+        registerHotkeys()
     }
 }

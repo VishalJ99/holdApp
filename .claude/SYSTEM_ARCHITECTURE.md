@@ -226,6 +226,95 @@ User: Press Cmd+Shift+Backspace (second time, within 3 seconds)
 
 **Bug Fixed**: Original implementation tried to create new record, causing "record to insert already exists" error. Now uses fetch-before-update pattern.
 
+### 6. Customizable Global Hotkeys (Cmd+, Preferences)
+
+**Purpose**: Allow users to customize all 5 global hotkeys to avoid conflicts with other applications and match user workflow preferences.
+
+**Key Components**:
+- `HotkeyPreferences.swift` - Data model and UserDefaults manager
+- `KeyCodeHelper.swift` - Key code ↔ human-readable conversion utilities
+- `HotkeyManager.swift` - Config-driven hotkey registration
+- `PreferencesWindowController.swift` - Preferences window management
+- `HotkeyRecorderViewController.swift` - Table view with recording UI
+- `AppDelegate.setupMenuBar()` - "Preferences..." menu item (Cmd+,)
+
+**Customizable Hotkeys**:
+1. **Show Spotlight** (default: Cmd+Shift+Space)
+2. **Sibling Selector** (default: Cmd+Shift+S)
+3. **Root Selector** (default: Cmd+Shift+R)
+4. **Dismiss Task** (default: Cmd+Shift+D)
+5. **Nuke All Tasks** (default: Cmd+Shift+Backspace)
+
+**Data Storage**:
+- UserDefaults key: `com.holdapp.hotkeys`
+- Format: JSON dictionary with keyCode (UInt32) and modifiers (UInt32) for each action
+- Falls back to hardcoded defaults if not found or corrupted
+
+**Architecture Flow**:
+```
+User clicks "Preferences..." → PreferencesWindowController opens
+User clicks "Record" button → HotkeyRecorderViewController enters recording mode
+User presses key combo → keyDown() captures event.keyCode + event.modifierFlags
+Validation → Check for required modifiers (Cmd/Shift/Ctrl), check for duplicates
+User clicks "Save" → HotkeyPreferencesManager.saveHotkeys() → UserDefaults
+NotificationCenter posts .hotkeyPreferencesChanged notification
+AppDelegate observer → HotkeyManager.reloadHotkeys()
+HotkeyManager.unregisterHotkeys() → UnregisterEventHotKey (Carbon API)
+HotkeyManager.registerHotkeys() → Loads from preferences → RegisterEventHotKey (Carbon API)
+```
+
+**Implementation Details**:
+
+1. **Config-Driven Registration** (`HotkeyManager.swift:22-67`):
+   - `registerHotkeys()` loads from `HotkeyPreferencesManager.shared.loadHotkeys()`
+   - No longer uses hardcoded `kVK_Space`, `kVK_ANSI_S`, etc.
+   - Reads `prefs.showSpotlight.keyCode` and `prefs.showSpotlight.modifiers`
+   - Maintains same hotkeyId mapping (1=Spotlight, 3=Sibling, 4=Root, 5=Dismiss, 6=Nuke)
+
+2. **Reload Mechanism** (`HotkeyManager.swift:127-132`, `AppDelegate.swift:105-112`):
+   - NotificationCenter observer listens for `.hotkeyPreferencesChanged`
+   - Calls `reloadHotkeys()` which unregisters old hotkeys and registers new ones
+   - Ensures hotkeys update immediately when user saves preferences
+
+3. **Validation** (`HotkeyPreferences.swift:108-150`):
+   - Requires at least one modifier key (Command, Shift, or Control)
+   - Checks for duplicate bindings within the app
+   - Option key NOT supported (bypasses performKeyEquivalent, goes to text input system)
+   - Returns clear error messages for UI display
+
+4. **Recording UI** (`HotkeyRecorderViewController.swift`):
+   - NSTableView with 3 columns: Action Name, Current Hotkey, Record Button
+   - `keyDown(with event:)` override captures keystrokes during recording mode
+   - Displays hotkeys as symbols (⌘⇧Space) using `KeyCodeHelper.formatHotkey()`
+   - Save/Cancel/Restore Defaults buttons
+   - Unsaved changes tracking with confirmation dialog
+
+5. **Error Handling** (`HotkeyManager.swift:95-107`):
+   - RegisterEventHotKey can fail if hotkey already in use system-wide
+   - Logs error to console with hotkey string and status code
+   - App continues to work, user sees which hotkey failed and can change it
+   - Does not crash or leave app in broken state
+
+**Valid Modifier Keys**:
+- ✅ Command (⌘) - `.command` / `cmdKey`
+- ✅ Shift (⇧) - `.shift` / `shiftKey`
+- ✅ Control (⌃) - `.control` / `controlKey`
+- ❌ Option (⌥) - **NOT supported** (text input system intercepts it, see commits `11d03a3` and `aae6cf3`)
+- ❌ Function (Fn) - System key, poor UX
+
+**File Locations**:
+- **Data Model**: `HoldApp/HotkeyPreferences.swift` (~175 lines)
+- **Utilities**: `HoldApp/KeyCodeHelper.swift` (~245 lines)
+- **Manager**: `HoldApp/HotkeyManager.swift` (modified, now config-driven)
+- **UI Controller**: `HoldApp/HotkeyRecorderViewController.swift` (~350 lines)
+- **Window Controller**: `HoldApp/PreferencesWindowController.swift` (~45 lines)
+- **Menu Integration**: `HoldApp/AppDelegate.swift` (added preferencesWindowController property, openPreferences method, menu item)
+
+**Backwards Compatibility**:
+- Default values match previous hardcoded bindings
+- Existing users see no change unless they open Preferences
+- UserDefaults approach allows seamless upgrades
+
 ---
 
 ## High-Level Architecture
@@ -1871,24 +1960,30 @@ Do NOT allow:
 ```
 HoldApp/
 ├── HoldApp/                          # Mac App Target
-│   ├── AppDelegate.swift             # Mac app lifecycle, task capture, sibling selection coordinator
-│   ├── HotkeyManager.swift           # Global keyboard shortcuts (Cmd+Shift+Space, Cmd+Shift+S, Cmd+Shift+R)
+│   ├── AppDelegate.swift             # Mac app lifecycle, task capture, sibling selection coordinator, preferences menu
+│   ├── HotkeyManager.swift           # ✅ REFACTORED - Config-driven global keyboard shortcuts (reads from UserDefaults)
+│   ├── HotkeyPreferences.swift       # 🆕 Hotkey data model, UserDefaults manager, validation
+│   ├── KeyCodeHelper.swift           # 🆕 Key code ↔ string conversion utilities
+│   ├── PreferencesWindowController.swift # 🆕 Preferences window lifecycle management
+│   ├── HotkeyRecorderViewController.swift # 🆕 Hotkey customization UI (table view, recording mode)
 │   ├── SpotlightViewController.swift # Capture bar UI (text field)
 │   ├── SpotlightPanel.swift          # Floating window container for Spotlight
-│   ├── SiblingSelectorViewController.swift # 🆕 Sibling task list UI (Cmd+Shift+S)
-│   ├── SiblingSelectorPanel.swift    # 🆕 Floating window container for sibling selector
-│   ├── SiblingTableView.swift        # 🆕 Custom NSTableView for keyboard event handling (siblings)
-│   ├── RootSelectorViewController.swift # 🆕 Root task list UI (Cmd+Shift+R)
-│   ├── RootSelectorPanel.swift       # 🆕 Floating window container for root selector
-│   ├── RootTableView.swift           # 🆕 Custom NSTableView for keyboard event handling (roots)
+│   ├── SiblingSelectorViewController.swift # Sibling task list UI (Cmd+Shift+S)
+│   ├── SiblingSelectorPanel.swift    # Floating window container for sibling selector
+│   ├── SiblingTableView.swift        # Custom NSTableView for keyboard event handling (siblings)
+│   ├── RootSelectorViewController.swift # Root task list UI (Cmd+Shift+R)
+│   ├── RootSelectorPanel.swift       # Floating window container for root selector
+│   ├── RootTableView.swift           # Custom NSTableView for keyboard event handling (roots)
 │   ├── SubmitTextField.swift         # Custom NSTextField for modifier key detection
 │   ├── TaskInputUI.swift             # Protocol for task input interface
 │   ├── AppState.swift                # Global state (current task tracking)
 │   ├── ToastManager.swift            # Temporary notification messages
-│   ├── LogManager.swift              # ✅ FIXED - Logs to Application Support directory
-│   ├── CloudKitManager.swift         # ✅ SHARED - All CloudKit operations
+│   ├── LocalTaskStore.swift          # Local JSON file storage for tasks
+│   ├── LogManager.swift              # Logs to Application Support directory
+│   ├── CloudKitManager.swift         # CloudKit operations (CurrentTaskPointer only)
 │   ├── Assets.xcassets/
-│   │   └── AppIcon.appiconset/       # Mac app icon (.icns)
+│   │   ├── AppIcon.appiconset/       # Mac app icon (.icns)
+│   │   └── hold_icon.imageset/       # Menu bar icon (176×176 PNG)
 │   └── HoldApp.entitlements          # CloudKit + Push capabilities
 │
 ├── HoldApp-iOS/                      # iOS App Target

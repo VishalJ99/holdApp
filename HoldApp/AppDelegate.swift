@@ -19,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
     private var statusItem: NSStatusItem!
+    private var preferencesWindowController: PreferencesWindowController?
 
     // Nuke confirmation state
     private var nukeConfirmationPending: Bool = false
@@ -101,6 +102,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.onNuke = { [weak self] in
             self?.handleNuke()
         }
+
+        // Listen for hotkey preference changes
+        NotificationCenter.default.addObserver(
+            forName: .hotkeyPreferencesChanged,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.hotkeyManager?.reloadHotkeys()
+        }
+
         hotkeyManager.registerHotkeys()
 
         // Initialize app state by syncing local storage with CloudKit
@@ -138,6 +149,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: ""
         ))
 
+        menu.addItem(NSMenuItem(
+            title: "Preferences...",
+            action: #selector(openPreferences),
+            keyEquivalent: ","
+        ))
+
         menu.addItem(NSMenuItem.separator())
 
         menu.addItem(NSMenuItem(
@@ -151,6 +168,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showSpotlightFromMenu() {
         spotlightPanel.show()
+    }
+
+    @objc private func openPreferences() {
+        if preferencesWindowController == nil {
+            preferencesWindowController = PreferencesWindowController()
+        }
+        preferencesWindowController?.showWindow(nil)
     }
 
     // MARK: - Task Creation
