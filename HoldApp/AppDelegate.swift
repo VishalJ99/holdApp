@@ -593,7 +593,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let rootList = roots.map { (id: $0.id, text: $0.text) }
 
         print("✅ [Root Selector] Found \(rootList.count) roots")
-        print("📊 [Root Selector] Current root ID: \(currentRootId ?? "nil")")
+        print("📊 [Root Selector] Current root ID: \(currentRootId ?? "nil")")  
 
         // Show panel with roots
         rootSelectorPanel.show(roots: rootList, currentRootId: currentRootId)
@@ -725,83 +725,68 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         print("✅ [Dismiss] Task deleted from storage")
 
-        // NAVIGATION FALLBACK ALGORITHM
+        // HIERARCHICAL NAVIGATION ALGORITHM
+        // Priority: siblings (oldest→newest) → parent → parent's siblings → next root → deepest/oldest leaf
 
-        // Try 1: Find next sibling by creation time
+        // Step 1: Try next sibling in creation order
         if let parentId = parentId {
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-            let nextSiblings = siblings
-                .filter { $0.timestamp > taskTimestamp }  // Created AFTER current task
-                .sorted { $0.timestamp < $1.timestamp }   // Oldest first
+            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)  // Already sorted ASC
 
-            if let nextSibling = nextSiblings.first {
-                print("✅ [Dismiss] Found next sibling: \(nextSibling.text)")
-                navigateToTask(task: nextSibling, reason: "next sibling")
-                ToastManager.shared.show("Task cleared", type: .success)
-                return
-            }
-
-            print("ℹ️ [Dismiss] No next sibling found")
-        }
-
-        // Try 2: Navigate to parent (if not root)
-        if let parentId = parentId,
-           let rootId = rootId,
-           parentId != rootId {
-            if let parentTask = LocalTaskStore.shared.fetchTaskById(parentId) {
-                print("✅ [Dismiss] Navigating to parent: \(parentTask.text)")
-                navigateToTask(task: parentTask, reason: "parent")
-                ToastManager.shared.show("Task cleared", type: .success)
-                return
-            }
-        }
-
-        // Try 3: If parent is root, check for parent's siblings
-        if let parentId = parentId,
-           let parentTask = LocalTaskStore.shared.fetchTaskById(parentId),
-           let grandparentId = parentTask.parent_id {
-            let parentSiblings = LocalTaskStore.shared.fetchSiblings(parentId: grandparentId)
-            let nextParentSiblings = parentSiblings
-                .filter { $0.timestamp > parentTask.timestamp }
-                .sorted { $0.timestamp < $1.timestamp }
-
-            if let nextParentSibling = nextParentSiblings.first {
-                print("✅ [Dismiss] Found parent's next sibling: \(nextParentSibling.text)")
-                navigateToTask(task: nextParentSibling, reason: "parent's sibling")
-                ToastManager.shared.show("Task cleared", type: .success)
-                return
-            }
-
-            print("ℹ️ [Dismiss] No parent siblings found")
-        }
-
-        // Try 4: Current task is/was a root - find next root
-        if parentId == nil {
-            let roots = LocalTaskStore.shared.fetchRoots()
-            let nextRoots = roots
-                .filter { $0.timestamp > taskTimestamp }
-                .sorted { $0.timestamp < $1.timestamp }  // Reverse DESC sort to ASC
-
-            if let nextRoot = nextRoots.first {
-                print("✅ [Dismiss] Found next root: \(nextRoot.text)")
-
-                // Navigate to latest task in that root's tree
-                if let latestInTree = LocalTaskStore.shared.fetchLatestInTree(rootId: nextRoot.id) {
-                    navigateToTask(task: latestInTree, reason: "next root tree")
+            // Find current task's position among siblings
+            if let currentIndex = siblings.firstIndex(where: { $0.id == current.id }) {
+                // Check if there's a next sibling
+                let nextIndex = currentIndex + 1
+                if nextIndex < siblings.count {
+                    let nextSibling = siblings[nextIndex]
+                    print("✅ [Dismiss] Found next sibling in order: \(nextSibling.text)")
+                    navigateToTask(task: nextSibling, reason: "next sibling")
                     ToastManager.shared.show("Task cleared", type: .success)
                     return
+                }
+            }
+
+            print("ℹ️ [Dismiss] No more siblings - moving up hierarchy")
+        }
+
+        // Step 2: Navigate to parent (walk up one level)
+        if let parentId = parentId,
+           let parentTask = LocalTaskStore.shared.fetchTaskById(parentId) {
+            print("✅ [Dismiss] Navigating to parent: \(parentTask.text)")
+            navigateToTask(task: parentTask, reason: "parent")
+            ToastManager.shared.show("Task cleared", type: .success)
+            return
+        }
+
+        // Step 3: Current task was a root - find next root in creation order
+        if parentId == nil {
+            let roots = LocalTaskStore.shared.fetchRoots()  // Now sorted ASC (oldest first)
+
+            // Find current root's position
+            if let currentIndex = roots.firstIndex(where: { $0.id == current.id }) {
+                // Check if there's a next root
+                let nextIndex = currentIndex + 1
+                if nextIndex < roots.count {
+                    let nextRoot = roots[nextIndex]
+                    print("✅ [Dismiss] Found next root: \(nextRoot.text)")
+
+                    // Navigate to deepest/oldest leaf in that root's tree
+                    if let deepestLeaf = LocalTaskStore.shared.fetchDeepestOldestLeaf(rootId: nextRoot.id) {
+                        navigateToTask(task: deepestLeaf, reason: "next root's deepest leaf")
+                        ToastManager.shared.show("Task cleared", type: .success)
+                        return
+                    }
                 }
             }
 
             print("ℹ️ [Dismiss] No next root found")
         }
 
-        // Try 5: Fallback to any remaining root
+        // Step 4: Fallback to first root's deepest leaf (wrap around)
         let allRoots = LocalTaskStore.shared.fetchRoots()
-        if let anyRoot = allRoots.first {
-            print("✅ [Dismiss] Falling back to latest root: \(anyRoot.text)")
-            if let latestInTree = LocalTaskStore.shared.fetchLatestInTree(rootId: anyRoot.id) {
-                navigateToTask(task: latestInTree, reason: "any remaining root")
+        if let firstRoot = allRoots.first {
+            print("✅ [Dismiss] Wrapping to first root: \(firstRoot.text)")
+            if let deepestLeaf = LocalTaskStore.shared.fetchDeepestOldestLeaf(rootId: firstRoot.id) {
+                navigateToTask(task: deepestLeaf, reason: "wrap to first root")
                 ToastManager.shared.show("Task cleared", type: .success)
                 return
             }
@@ -908,9 +893,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         print("📚 [Startup] Found \(allTasks.count) tasks in local storage")
 
-        // Find latest root
+        // Find latest root (last in ASC-sorted array = newest)
         let roots = LocalTaskStore.shared.fetchRoots()
-        guard let latestRoot = roots.first else {
+        guard let latestRoot = roots.last else {
             print("⚠️ [Startup] No root tasks found despite having tasks (data inconsistency)")
             AppState.shared.clearCurrent()
             return

@@ -110,13 +110,13 @@ class LocalTaskStore {
         return loadFromFile().tasks
     }
 
-    /// Fetch all root tasks (parent_id == nil)
-    /// Sorted by timestamp DESC (newest first)
+    /// Fetch all root tasks (tasks with no parent)
+    /// Sorted by timestamp ASC (oldest first, creation order)
     func fetchRoots() -> [Task] {
         let allTasks = fetchAllTasks()
         return allTasks
             .filter { $0.parent_id == nil }
-            .sorted { $0.timestamp > $1.timestamp }
+            .sorted { $0.timestamp < $1.timestamp }
     }
 
     /// Fetch all siblings of a given parent
@@ -150,6 +150,51 @@ class LocalTaskStore {
 
         // Fallback: fetch the root itself (if no descendants exist yet)
         return allTasks.first { $0.id == rootId }
+    }
+
+    /// Find the oldest leaf task at the deepest level in a tree
+    /// Used for hierarchical queue navigation when switching roots
+    /// Returns the leaf task at maximum depth, preferring oldest by creation time
+    func fetchDeepestOldestLeaf(rootId: String) -> Task? {
+        let allTasks = fetchAllTasks()
+        let treeTasks = allTasks.filter { $0.root_id == rootId }
+
+        // If tree is empty, return the root itself
+        if treeTasks.isEmpty {
+            return allTasks.first { $0.id == rootId }
+        }
+
+        // Calculate depth for each task by walking up parent chain
+        var taskDepths: [String: Int] = [:]
+        for task in treeTasks {
+            var depth = 0
+            var currentId = task.parent_id
+
+            // Walk up to root, counting levels
+            while let parentId = currentId {
+                depth += 1
+                if let parentTask = allTasks.first(where: { $0.id == parentId }) {
+                    currentId = parentTask.parent_id
+                } else {
+                    break
+                }
+            }
+
+            taskDepths[task.id] = depth
+        }
+
+        // Find maximum depth in the tree
+        guard let maxDepth = taskDepths.values.max() else {
+            return allTasks.first { $0.id == rootId }
+        }
+
+        // Filter for tasks at max depth that are leaves (no children)
+        let leavesAtMaxDepth = treeTasks.filter { task in
+            taskDepths[task.id] == maxDepth && !hasChildren(taskId: task.id)
+        }
+
+        // Return oldest leaf by creation time (timestamp ASC)
+        return leavesAtMaxDepth.sorted { $0.timestamp < $1.timestamp }.first
     }
 
     /// Clear all tasks (dev utility for fresh start)
