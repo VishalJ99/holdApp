@@ -277,4 +277,73 @@ class LocalTaskStore {
             return false
         }
     }
+
+    /// Fetch all leaf tasks (tasks with no children) in a given root
+    /// Sorted by timestamp ASC (oldest first, creation order)
+    /// Used for Leaf Selector (Cmd+Shift+S) - shows all actionable tasks in current tree
+    func fetchLeaves(rootId: String) -> [Task] {
+        let allTasks = fetchAllTasks()
+        let tasksInRoot = allTasks.filter { $0.root_id == rootId || $0.id == rootId }
+
+        // Filter for tasks that have no children
+        let leaves = tasksInRoot.filter { task in
+            !hasChildren(taskId: task.id)
+        }
+
+        return leaves.sorted { $0.timestamp < $1.timestamp }
+    }
+
+    /// Fetch all tasks in the same root hierarchy as the given task
+    /// Returns array ordered by depth (root first, then by creation timestamp within each level)
+    /// Used for Parent Selector (Cmd+P in Spotlight) - shows all possible parents
+    func fetchAllTasksInHierarchy(taskId: String) -> (tasks: [Task], currentIndex: Int) {
+        let allTasks = fetchAllTasks()
+
+        // Find the current task
+        guard let currentTask = allTasks.first(where: { $0.id == taskId }) else {
+            return ([], -1)
+        }
+
+        // Get the root ID
+        let rootId = currentTask.root_id ?? currentTask.id
+
+        // Fetch all tasks in this root (including the root itself)
+        let tasksInRoot = allTasks.filter { $0.root_id == rootId || $0.id == rootId }
+
+        // Calculate depth for each task
+        var taskDepths: [String: Int] = [:]
+        for task in tasksInRoot {
+            var depth = 0
+            var currentId = task.parent_id
+
+            // Walk up to root, counting levels
+            while let parentId = currentId {
+                depth += 1
+                if let parentTask = allTasks.first(where: { $0.id == parentId }) {
+                    currentId = parentTask.parent_id
+                } else {
+                    break
+                }
+            }
+
+            taskDepths[task.id] = depth
+        }
+
+        // Sort by depth first (ascending), then by timestamp (ascending) within same depth
+        let sortedTasks = tasksInRoot.sorted { task1, task2 in
+            let depth1 = taskDepths[task1.id] ?? 0
+            let depth2 = taskDepths[task2.id] ?? 0
+
+            if depth1 != depth2 {
+                return depth1 < depth2  // Shallower tasks first
+            } else {
+                return task1.timestamp < task2.timestamp  // Older tasks first within same depth
+            }
+        }
+
+        // Find current task index
+        let currentIndex = sortedTasks.firstIndex(where: { $0.id == taskId }) ?? -1
+
+        return (sortedTasks, currentIndex)
+    }
 }

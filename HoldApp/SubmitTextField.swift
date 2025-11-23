@@ -14,7 +14,17 @@ class SubmitTextField: NSTextField {
     /// Parameters: modifiers pressed (empty set for plain Enter)
     var onSubmit: ((NSEvent.ModifierFlags) -> Void)?
 
+    /// Callback triggered when Cmd+P is pressed (parent selector)
+    var onParentSelector: (() -> Void)?
+
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // Check for Cmd+P (parent selector)
+        if event.keyCode == 35 && event.modifierFlags.contains(.command) {  // P key
+            print("🔑 [SubmitTextField] Cmd+P detected - triggering parent selector")
+            onParentSelector?()
+            return true
+        }
+
         // Check for Return/Enter key (keyCode 36)
         if event.keyCode == 36 {
             // Get relevant modifier flags, ignoring system flags like Caps Lock, Function, etc.

@@ -9,11 +9,18 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     private var isEditMode: Bool = false
     private var editingTaskId: String?
 
+    // MARK: - Parent Selection State
+
+    var selectedParentId: String?
+    var selectedParentText: String?
+    var preservedText: String?  // Text preserved when opening parent selector
+
     // MARK: - TaskInputUI Protocol
 
     var onTaskSubmit: ((String, TaskCreationType) -> Void)?
     var onTaskUpdate: ((String, String) -> Void)?
     var onCancel: (() -> Void)?
+    var onParentSelectorRequested: ((String) -> Void)?  // Called with text from field
 
     var isVisible: Bool {
         return view.window?.isVisible ?? false
@@ -79,12 +86,53 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             self?.handleSubmit(modifiers: modifiers)
         }
 
+        // Handle Cmd+P (parent selector)
+        textField.onParentSelector = { [weak self] in
+            self?.handleParentSelectorRequest()
+        }
+
         view.addSubview(textField)
+    }
+
+    private func handleParentSelectorRequest() {
+        print("🔑 [SpotlightViewController] Parent selector requested")
+        let currentText = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !currentText.isEmpty else {
+            print("⚠️ [SpotlightViewController] Cannot open parent selector - no text entered")
+            return
+        }
+
+        // Preserve text for when user returns
+        preservedText = currentText
+        print("📝 [SpotlightViewController] Preserved text: \(currentText)")
+
+        // Notify AppDelegate to open parent selector
+        onParentSelectorRequested?(currentText)
     }
 
     func focusTextField() {
         view.window?.makeFirstResponder(textField)
         textField.stringValue = ""
+    }
+
+    func restorePreservedText() {
+        if let text = preservedText {
+            textField.stringValue = text
+            print("📝 [SpotlightViewController] Restored preserved text: \(text)")
+        }
+    }
+
+    func setSelectedParent(parentId: String, parentText: String) {
+        selectedParentId = parentId
+        selectedParentText = parentText
+        print("✅ [SpotlightViewController] Parent selected: \(parentText) (ID: \(parentId))")
+    }
+
+    func clearParentSelection() {
+        selectedParentId = nil
+        selectedParentText = nil
+        preservedText = nil
+        print("🔄 [SpotlightViewController] Cleared parent selection")
     }
 
     override func keyDown(with event: NSEvent) {

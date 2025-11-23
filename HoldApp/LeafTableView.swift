@@ -1,5 +1,5 @@
 //
-//  SiblingTableView.swift
+//  LeafTableView.swift
 //  HoldApp
 //
 //  Custom NSTableView subclass that forwards keyboard events to delegate
@@ -9,31 +9,31 @@
 
 import Cocoa
 
-protocol SiblingTableViewDelegate: AnyObject {
-    func siblingTableViewDidPressEnter(_ tableView: SiblingTableView)
-    func siblingTableViewDidPressEscape(_ tableView: SiblingTableView)
+protocol LeafTableViewDelegate: AnyObject {
+    func leafTableViewDidPressEnter(_ tableView: LeafTableView)
+    func leafTableViewDidPressEscape(_ tableView: LeafTableView)
 }
 
-class SiblingTableView: NSTableView {
+class LeafTableView: NSTableView {
 
-    weak var keyboardDelegate: SiblingTableViewDelegate?
+    weak var keyboardDelegate: LeafTableViewDelegate?
 
     override var acceptsFirstResponder: Bool {
         return true
     }
 
     override func keyDown(with event: NSEvent) {
-        print("🔴 SiblingTableView.keyDown called - keyCode: \(event.keyCode)")
+        print("🔴 LeafTableView.keyDown called - keyCode: \(event.keyCode)")
 
         // Handle Escape key
         if event.keyCode == 53 {
-            keyboardDelegate?.siblingTableViewDidPressEscape(self)
+            keyboardDelegate?.leafTableViewDidPressEscape(self)
             return
         }
 
         // Handle Enter key
         if event.keyCode == 36 {
-            keyboardDelegate?.siblingTableViewDidPressEnter(self)
+            keyboardDelegate?.leafTableViewDidPressEnter(self)
             return
         }
 

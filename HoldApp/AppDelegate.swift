@@ -12,10 +12,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var spotlightPanel: SpotlightPanel!
     private var spotlightViewController: SpotlightViewController!
-    private var siblingSelectorPanel: SiblingSelectorPanel!
-    private var siblingSelectorViewController: SiblingSelectorViewController!
+    private var leafSelectorPanel: LeafSelectorPanel!
+    private var leafSelectorViewController: LeafSelectorViewController!
     private var rootSelectorPanel: RootSelectorPanel!
     private var rootSelectorViewController: RootSelectorViewController!
+    private var parentSelectorPanel: ParentSelectorPanel!
+    private var parentSelectorViewController: ParentSelectorViewController!
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
     private var statusItem: NSStatusItem!
@@ -56,18 +58,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.spotlightPanel.hide()
         }
 
-        // Create Sibling Selector UI
-        siblingSelectorViewController = SiblingSelectorViewController()
-        siblingSelectorPanel = SiblingSelectorPanel()
-        siblingSelectorPanel.contentViewController = siblingSelectorViewController
-
-        // Setup sibling selector callbacks
-        siblingSelectorViewController.onSiblingSelected = { [weak self] taskId, taskText in
-            self?.handleSiblingSelection(taskId: taskId, taskText: taskText)
+        spotlightViewController.onParentSelectorRequested = { [weak self] text in
+            self?.showParentSelector(taskText: text)
         }
 
-        siblingSelectorViewController.onCancel = { [weak self] in
-            self?.siblingSelectorPanel.hide()
+        // Create Leaf Selector UI
+        leafSelectorViewController = LeafSelectorViewController()
+        leafSelectorPanel = LeafSelectorPanel()
+        leafSelectorPanel.contentViewController = leafSelectorViewController
+
+        // Setup leaf selector callbacks
+        leafSelectorViewController.onLeafSelected = { [weak self] taskId, taskText in
+            self?.handleLeafSelection(taskId: taskId, taskText: taskText)
+        }
+
+        leafSelectorViewController.onCancel = { [weak self] in
+            self?.leafSelectorPanel.hide()
         }
 
         // Create Root Selector UI
@@ -84,6 +90,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.rootSelectorPanel.hide()
         }
 
+        // Create Parent Selector UI
+        parentSelectorViewController = ParentSelectorViewController()
+        parentSelectorPanel = ParentSelectorPanel()
+        parentSelectorPanel.contentViewController = parentSelectorViewController
+
+        // Setup parent selector callbacks
+        parentSelectorViewController.onParentSelected = { [weak self] parentId, parentText, shouldSwitch in
+            self?.handleParentSelection(parentId: parentId, parentText: parentText, shouldSwitch: shouldSwitch)
+        }
+
+        parentSelectorViewController.onCancel = { [weak self] in
+            self?.handleParentSelectorCancelled()
+        }
+
         // Setup hotkeys
         hotkeyManager = HotkeyManager()
         hotkeyManager.onShowHotkey = { [weak self] in
@@ -91,7 +111,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         // Note: Escape is handled locally by each panel's keyDown() method
         hotkeyManager.onSiblingSelector = { [weak self] in
-            self?.showSiblingSelector()
+            self?.showLeafSelector()
         }
         hotkeyManager.onRootSelector = { [weak self] in
             self?.showRootSelector()
@@ -453,52 +473,167 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         logManager.log(text: text, id: taskId, parentId: reference.parentId, rootId: rootId)
     }
 
-    // MARK: - Sibling Selection
+    private func createTaskWithCustomParent(text: String, customParentId: String, switchToTask: Bool) {
+        print("📝 [Task Creation] Type: custom parent")
+        print("📝 [Task Creation] Text: \(text)")
+        print("📝 [Task Creation] Custom parent ID: \(customParentId)")
+        print("📝 [Task Creation] Switch: \(switchToTask)")
 
-    private func showSiblingSelector() {
-        print("🔍 [Sibling Selector] Triggered via Cmd+Shift+S")
+        // Generate new task ID
+        let taskId = UUID().uuidString
+        let timestamp = Date()
+
+        // Fetch parent to get root_id
+        guard let parentTask = LocalTaskStore.shared.fetchTaskById(customParentId) else {
+            ToastManager.shared.show("❌ Parent task not found", type: .error)
+            print("❌ [Task Creation] Parent task not found: \(customParentId)")
+            return
+        }
+
+        // Task is child of selected parent
+        let parent_id = customParentId
+        let root_id = parentTask.root_id ?? customParentId  // Use parent's root, or parent itself if it's the root
+
+        print("📊 [Task Creation] Calculated: parent_id=\(parent_id) | root_id=\(root_id)")
+
+        // Save task to local storage (instant!)
+        LocalTaskStore.shared.saveTask(
+            id: taskId,
+            text: text,
+            timestamp: timestamp,
+            parent_id: parent_id,
+            root_id: root_id,
+            isCompleted: false
+        )
+
+        print("✅ [Task Creation] Saved to local storage")
+
+        // Determine what to display
+        let displayTaskId: String
+        let displayText: String
+        let displayParentId: String?
+        let displayRootId: String?
+
+        if switchToTask {
+            // Switch to new task
+            displayTaskId = taskId
+            displayText = text
+            displayParentId = parent_id
+            displayRootId = root_id
+
+            // Update AppState
+            AppState.shared.setCurrent(id: taskId, text: text, parentId: parent_id, rootId: root_id)
+        } else {
+            // Keep current task (don't switch)
+            if let current = AppState.shared.currentTask {
+                displayTaskId = current.id
+                displayText = current.text
+                displayParentId = current.parentId
+                displayRootId = current.rootId
+            } else {
+                // Fallback: no current task, use new task
+                displayTaskId = taskId
+                displayText = text
+                displayParentId = parent_id
+                displayRootId = root_id
+                AppState.shared.setCurrent(id: taskId, text: text, parentId: parent_id, rootId: root_id)
+            }
+        }
+
+        // Fetch display metadata
+        var parentTaskText: String? = nil
+        var rootTaskText: String? = nil
+        var showEllipsis = false
+        var siblingPosition: Int? = nil
+        var siblingCount: Int? = nil
+
+        if let displayParentId = displayParentId {
+            let displayParentTask = LocalTaskStore.shared.fetchTaskById(displayParentId)
+            parentTaskText = displayParentTask?.text
+
+            // Calculate ellipsis
+            if let parentParentId = displayParentTask?.parent_id,
+               let displayRootId = displayRootId,
+               parentParentId != displayRootId {
+                showEllipsis = true
+            }
+
+            // Fetch root text
+            if let displayRootId = displayRootId, displayRootId != displayParentId {
+                rootTaskText = LocalTaskStore.shared.fetchTaskById(displayRootId)?.text
+            }
+
+            // Fetch sibling position/count
+            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: displayParentId)
+            siblingCount = siblings.count
+            siblingPosition = siblings.firstIndex(where: { $0.id == displayTaskId }).map { $0 + 1 }
+        }
+
+        // Update CloudKit pointer
+        CloudKitManager.shared.updateCurrentTaskPointer(
+            taskId: displayTaskId,
+            text: displayText,
+            parentId: displayParentId,
+            rootId: displayRootId,
+            parentTaskText: parentTaskText,
+            rootTaskText: rootTaskText,
+            showEllipsis: showEllipsis,
+            siblingPosition: siblingPosition,
+            siblingCount: siblingCount
+        ) { error in
+            if let error = error {
+                print("⚠️ [Task Creation] Pointer update failed: \(error.localizedDescription)")
+            }
+        }
+
+        let message = switchToTask ? "✓ Task created (current)" : "✓ Task created"
+        ToastManager.shared.show(message, type: .success)
+
+        // Log to file
+        logManager.log(text: text, id: taskId, parentId: parent_id, rootId: root_id)
+    }
+
+    // MARK: - Leaf Selection
+
+    private func showLeafSelector() {
+        print("🔍 [Leaf Selector] Triggered via Cmd+Shift+S")
 
         // Check if current task exists
         guard let current = AppState.shared.currentTask else {
             ToastManager.shared.show("⚠️ No current task. Switch to a task first.", type: .error)
-            print("⚠️ [Sibling Selector] No current task in AppState")
+            print("⚠️ [Leaf Selector] No current task in AppState")
             return
         }
 
-        // Check if current task has a parent
-        guard let parentId = current.parentId else {
-            ToastManager.shared.show("⚠️ Current task has no parent. Cannot show siblings.", type: .error)
-            print("⚠️ [Sibling Selector] Current task is top-level (no parent)")
-            return
-        }
+        // Get root ID (use current task ID if it's a root)
+        let rootId = current.rootId ?? current.id
+        print("📊 [Leaf Selector] Current task: \(current.text)")
+        print("🔗 [Leaf Selector] Root ID: \(rootId)")
 
-        print("📊 [Sibling Selector] Current task: \(current.text)")
-        print("🔗 [Sibling Selector] Parent ID: \(parentId)")
+        // Fetch all leaves in this root from local storage (instant!)
+        let leaves = LocalTaskStore.shared.fetchLeaves(rootId: rootId)
+        let allLeaves = leaves.map { (id: $0.id, text: $0.text) }
 
-        // Fetch siblings from local storage (instant!)
-        let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-        let allSiblings = siblings.map { (id: $0.id, text: $0.text) }
+        // Find current task's index among leaves
+        let currentIndex = allLeaves.firstIndex(where: { $0.id == current.id }) ?? 0
 
-        // Find current task's index
-        let currentIndex = allSiblings.firstIndex(where: { $0.id == current.id }) ?? 0
+        print("✅ [Leaf Selector] Found \(allLeaves.count) leaves in root")
+        print("📊 [Leaf Selector] Current index: \(currentIndex + 1)/\(allLeaves.count)")
 
-        print("✅ [Sibling Selector] Found \(allSiblings.count) siblings")
-        print("📊 [Sibling Selector] Current index: \(currentIndex + 1)/\(allSiblings.count)")
-
-        // Show panel with siblings
-        siblingSelectorPanel.show(siblings: allSiblings, currentIndex: currentIndex)
+        // Show panel with leaves
+        leafSelectorPanel.show(leaves: allLeaves, currentIndex: currentIndex)
     }
 
-    private func handleSiblingSelection(taskId: String, taskText: String) {
-        print("🔄 [Sibling Switch] Selected sibling: \(taskText) (ID: \(taskId))")
+    private func handleLeafSelection(taskId: String, taskText: String) {
+        print("🔄 [Leaf Switch] Selected leaf: \(taskText) (ID: \(taskId))")
 
         // Hide the panel first
-        siblingSelectorPanel.hide()
+        leafSelectorPanel.hide()
 
         // Fetch the full task record from local storage
         guard let task = LocalTaskStore.shared.fetchTaskById(taskId) else {
             ToastManager.shared.show("❌ Failed to load task", type: .error)
-            print("❌ [Sibling Switch] Task not found")
+            print("❌ [Leaf Switch] Task not found")
             return
         }
 
@@ -506,7 +641,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let parentId = task.parent_id
         let rootId = task.root_id
 
-        print("📝 [Sibling Switch] Task metadata: parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
+        print("📝 [Leaf Switch] Task metadata: parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
 
         // Update AppState
         AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
@@ -522,30 +657,30 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if let parentId = parentId {
             let parentTask = LocalTaskStore.shared.fetchTaskById(parentId)
             parentTaskText = parentTask?.text
-            print("✅ [Sibling Switch] Fetched parent text: \(parentTaskText ?? "nil")")
+            print("✅ [Leaf Switch] Fetched parent text: \(parentTaskText ?? "nil")")
 
             // Calculate showEllipsis: check if parent's parent != root
             if let parentParentId = parentTask?.parent_id,
                let rootId = rootId,
                parentParentId != rootId {
                 showEllipsis = true
-                print("📊 [Sibling Switch] showEllipsis=true (parent's parent exists and != root)")
+                print("📊 [Leaf Switch] showEllipsis=true (parent's parent exists and != root)")
             } else {
-                print("📊 [Sibling Switch] showEllipsis=false")
+                print("📊 [Leaf Switch] showEllipsis=false")
             }
 
             // Fetch root task text if root exists and is different from parent
             if let rootId = rootId, rootId != parentId {
                 let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
                 rootTaskText = rootTask?.text
-                print("✅ [Sibling Switch] Fetched root text: \(rootTaskText ?? "nil")")
+                print("✅ [Leaf Switch] Fetched root text: \(rootTaskText ?? "nil")")
             }
 
             // Fetch siblings to get position/count
             let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
             siblingCount = siblings.count
             siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
-            print("✅ [Sibling Switch] Sibling info: position=\(siblingPosition ?? 0)/\(siblingCount ?? 0)")
+            print("✅ [Leaf Switch] Sibling info: position=\(siblingPosition ?? 0)/\(siblingCount ?? 0)")
         }
 
         // Update pointer with complete display info
@@ -561,16 +696,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             siblingCount: siblingCount
         ) { error in
             if let error = error {
-                print("⚠️ [Sibling Switch] Pointer update failed: \(error.localizedDescription)")
+                print("⚠️ [Leaf Switch] Pointer update failed: \(error.localizedDescription)")
             }
         }
 
         // Show success toast
-        if let position = siblingPosition, let count = siblingCount {
-            ToastManager.shared.show("✓ Switched to sibling \(position)/\(count)", type: .success)
-        } else {
-            ToastManager.shared.show("✓ Switched to sibling", type: .success)
-        }
+        ToastManager.shared.show("✓ Switched to leaf task", type: .success)
     }
 
     // MARK: - Root Selector
@@ -681,6 +812,70 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Show success toast
         ToastManager.shared.show("✓ Switched to \(rootText) tree", type: .success)
+    }
+
+    // MARK: - Parent Selection
+
+    private func showParentSelector(taskText: String) {
+        print("🔍 [Parent Selector] Triggered via Cmd+P")
+        print("📝 [Parent Selector] Task text: \(taskText)")
+
+        // Check if current task exists
+        guard let current = AppState.shared.currentTask else {
+            ToastManager.shared.show("⚠️ No current task. Create a task first.", type: .error)
+            print("⚠️ [Parent Selector] No current task in AppState")
+            return
+        }
+
+        // Fetch all tasks in hierarchy (sorted by depth: root → deepest)
+        let (tasksInHierarchy, currentIndex) = LocalTaskStore.shared.fetchAllTasksInHierarchy(taskId: current.id)
+        let taskList = tasksInHierarchy.map { (id: $0.id, text: $0.text) }
+
+        print("✅ [Parent Selector] Found \(taskList.count) tasks in hierarchy")
+        print("📊 [Parent Selector] Current task at index: \(currentIndex)")
+
+        // Hide Spotlight panel
+        spotlightPanel.hide()
+
+        // Show parent selector panel
+        parentSelectorPanel.show(parents: taskList, currentIndex: currentIndex)
+    }
+
+    private func handleParentSelection(parentId: String, parentText: String, shouldSwitch: Bool) {
+        print("🔄 [Parent Selection] Selected parent: \(parentText) (ID: \(parentId), switch: \(shouldSwitch))")
+
+        // Hide parent selector
+        parentSelectorPanel.hide()
+
+        // Get preserved text from Spotlight
+        guard let taskText = spotlightViewController.preservedText else {
+            print("❌ [Parent Selection] No preserved text found")
+            return
+        }
+
+        // Store parent selection in Spotlight
+        spotlightViewController.setSelectedParent(parentId: parentId, parentText: parentText)
+
+        // Create task immediately as child of selected parent
+        createTaskWithCustomParent(
+            text: taskText,
+            customParentId: parentId,
+            switchToTask: shouldSwitch
+        )
+
+        // Clear parent selection for next task
+        spotlightViewController.clearParentSelection()
+    }
+
+    private func handleParentSelectorCancelled() {
+        print("⎋ [Parent Selector] Cancelled")
+
+        // Hide parent selector
+        parentSelectorPanel.hide()
+
+        // Show Spotlight again with preserved text
+        spotlightPanel.show()
+        spotlightViewController.restorePreservedText()
     }
 
     // MARK: - Task Dismissal

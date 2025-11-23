@@ -1,24 +1,24 @@
 //
-//  SiblingSelectorViewController.swift
+//  LeafSelectorViewController.swift
 //  HoldApp
 //
-//  Displays list of sibling tasks for selection (Cmd+Shift+S)
+//  Displays list of leaf tasks for selection (Cmd+Shift+S)
 //  Minimal, terminal-inspired aesthetic matching Hold's vision
 //
 
 import Cocoa
 
-class SiblingSelectorViewController: NSViewController {
+class LeafSelectorViewController: NSViewController {
 
     // MARK: - Properties
 
-    private var tableView: SiblingTableView!
+    private var tableView: LeafTableView!
     private var scrollView: NSScrollView!
-    private var siblings: [(id: String, text: String)] = []
+    private var leaves: [(id: String, text: String)] = []
     private var currentIndex: Int = 0
 
-    /// Called when user selects a sibling (presses Enter)
-    var onSiblingSelected: ((String, String) -> Void)?
+    /// Called when user selects a leaf (presses Enter)
+    var onLeafSelected: ((String, String) -> Void)?
 
     /// Called when user cancels (presses Escape)
     var onCancel: (() -> Void)?
@@ -42,7 +42,7 @@ class SiblingSelectorViewController: NSViewController {
         scrollView.backgroundColor = .clear
 
         // Create custom table view
-        tableView = SiblingTableView(frame: scrollView.bounds)
+        tableView = LeafTableView(frame: scrollView.bounds)
         tableView.backgroundColor = .clear
         tableView.gridStyleMask = []
         tableView.headerView = nil
@@ -58,7 +58,7 @@ class SiblingSelectorViewController: NSViewController {
         tableView.doubleAction = #selector(handleDoubleClick)
 
         // Add single column
-        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("SiblingColumn"))
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("LeafColumn"))
         column.resizingMask = .autoresizingMask
         tableView.addTableColumn(column)
 
@@ -68,15 +68,15 @@ class SiblingSelectorViewController: NSViewController {
 
     // MARK: - Public Methods
 
-    /// Update the list of siblings and current index
-    func updateSiblings(_ siblings: [(id: String, text: String)], currentIndex: Int) {
-        self.siblings = siblings
+    /// Update the list of leaves and current index
+    func updateLeaves(_ leaves: [(id: String, text: String)], currentIndex: Int) {
+        self.leaves = leaves
         self.currentIndex = currentIndex
 
         tableView.reloadData()
 
-        // Select current sibling
-        if currentIndex >= 0 && currentIndex < siblings.count {
+        // Select current leaf
+        if currentIndex >= 0 && currentIndex < leaves.count {
             tableView.selectRowIndexes(IndexSet(integer: currentIndex), byExtendingSelection: false)
             tableView.scrollRowToVisible(currentIndex)
         }
@@ -104,27 +104,27 @@ class SiblingSelectorViewController: NSViewController {
 
     @objc private func handleDoubleClick() {
         let selectedRow = tableView.selectedRow
-        if selectedRow >= 0 && selectedRow < siblings.count {
-            let sibling = siblings[selectedRow]
-            onSiblingSelected?(sibling.id, sibling.text)
+        if selectedRow >= 0 && selectedRow < leaves.count {
+            let leaf = leaves[selectedRow]
+            onLeafSelected?(leaf.id, leaf.text)
         }
     }
 }
 
-// MARK: - SiblingTableViewDelegate
+// MARK: - LeafTableViewDelegate
 
-extension SiblingSelectorViewController: SiblingTableViewDelegate {
-    func siblingTableViewDidPressEnter(_ tableView: SiblingTableView) {
+extension LeafSelectorViewController: LeafTableViewDelegate {
+    func leafTableViewDidPressEnter(_ tableView: LeafTableView) {
         print("⏎ Enter pressed on row: \(tableView.selectedRow)")
         let selectedRow = tableView.selectedRow
-        if selectedRow >= 0 && selectedRow < siblings.count {
-            let sibling = siblings[selectedRow]
-            print("⏎ Selecting sibling: \(sibling.text)")
-            onSiblingSelected?(sibling.id, sibling.text)
+        if selectedRow >= 0 && selectedRow < leaves.count {
+            let leaf = leaves[selectedRow]
+            print("⏎ Selecting leaf: \(leaf.text)")
+            onLeafSelected?(leaf.id, leaf.text)
         }
     }
 
-    func siblingTableViewDidPressEscape(_ tableView: SiblingTableView) {
+    func leafTableViewDidPressEscape(_ tableView: LeafTableView) {
         print("⎋ Escape pressed - calling onCancel")
         onCancel?()
     }
@@ -132,28 +132,28 @@ extension SiblingSelectorViewController: SiblingTableViewDelegate {
 
 // MARK: - NSTableViewDataSource
 
-extension SiblingSelectorViewController: NSTableViewDataSource {
+extension LeafSelectorViewController: NSTableViewDataSource {
     func numberOfRows(in tableView: NSTableView) -> Int {
-        return siblings.count
+        return leaves.count
     }
 }
 
 // MARK: - NSTableViewDelegate
 
-extension SiblingSelectorViewController: NSTableViewDelegate {
+extension LeafSelectorViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
-        guard row >= 0 && row < siblings.count else { return nil }
+        guard row >= 0 && row < leaves.count else { return nil }
 
-        let sibling = siblings[row]
+        let leaf = leaves[row]
         let isCurrent = (row == currentIndex)
         let position = row + 1
-        let total = siblings.count
+        let total = leaves.count
 
         // Create cell view
         let cellView = NSView(frame: NSRect(x: 0, y: 0, width: tableView.bounds.width, height: 32))
 
         // Create label with position indicator
-        let label = NSTextField(labelWithString: "[\(position)/\(total)] \(sibling.text)")
+        let label = NSTextField(labelWithString: "[\(position)/\(total)] \(leaf.text)")
         label.font = isCurrent ? NSFont.systemFont(ofSize: 14, weight: .semibold) : NSFont.systemFont(ofSize: 14, weight: .regular)
         label.textColor = isCurrent ? .white : NSColor.white.withAlphaComponent(0.7)
         label.lineBreakMode = .byTruncatingTail
@@ -173,8 +173,8 @@ extension SiblingSelectorViewController: NSTableViewDelegate {
     func tableViewSelectionDidChange(_ notification: Notification) {
         let selectedRow = tableView.selectedRow
         print("🔵 Selection changed to row: \(selectedRow)")
-        if selectedRow >= 0 && selectedRow < siblings.count {
-            print("🔵 Selected sibling: \(siblings[selectedRow].text)")
+        if selectedRow >= 0 && selectedRow < leaves.count {
+            print("🔵 Selected leaf: \(leaves[selectedRow].text)")
         }
     }
 }

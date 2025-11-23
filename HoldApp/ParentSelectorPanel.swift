@@ -1,14 +1,14 @@
 //
-//  SiblingSelectorPanel.swift
+//  ParentSelectorPanel.swift
 //  HoldApp
 //
-//  Floating panel for sibling selector (Cmd+Shift+S)
+//  Floating panel for parent selector (Cmd+P in Spotlight)
 //  Minimal, terminal-inspired aesthetic matching SpotlightPanel
 //
 
 import Cocoa
 
-class SiblingSelectorPanel: NSPanel {
+class ParentSelectorPanel: NSPanel {
 
     init() {
         super.init(
@@ -65,15 +65,15 @@ class SiblingSelectorPanel: NSPanel {
         return super.performKeyEquivalent(with: event)
     }
 
-    /// Show the panel with sibling list
-    func show(siblings: [(id: String, text: String)], currentIndex: Int) {
-        print("🎯 [Panel.show] Called with \(siblings.count) siblings, currentIndex: \(currentIndex)")
+    /// Show the panel with parent list
+    func show(parents: [(id: String, text: String)], currentIndex: Int) {
+        print("🎯 [Panel.show] Called with \(parents.count) parents, currentIndex: \(currentIndex)")
 
-        // Adjust height based on sibling count
+        // Adjust height based on parent count
         let rowHeight: CGFloat = 36  // 32px row + 4px spacing
         let minHeight: CGFloat = 100
         let maxHeight: CGFloat = 500
-        let calculatedHeight = CGFloat(siblings.count) * rowHeight + 40  // +40 for padding
+        let calculatedHeight = CGFloat(parents.count) * rowHeight + 40  // +40 for padding
 
         let newHeight = min(max(calculatedHeight, minHeight), maxHeight)
         let currentFrame = self.frame
@@ -82,11 +82,11 @@ class SiblingSelectorPanel: NSPanel {
         // Center on screen with new height
         self.center()
 
-        // Update view controller with siblings
+        // Update view controller with parents
         print("🎯 [Panel.show] contentViewController: \(self.contentViewController != nil ? "exists" : "nil")")
-        if let viewController = self.contentViewController as? SiblingSelectorViewController {
-            print("🎯 [Panel.show] Casting to SiblingSelectorViewController succeeded")
-            viewController.updateSiblings(siblings, currentIndex: currentIndex)
+        if let viewController = self.contentViewController as? ParentSelectorViewController {
+            print("🎯 [Panel.show] Casting to ParentSelectorViewController succeeded")
+            viewController.updateParents(parents, currentIndex: currentIndex)
         } else {
             print("❌ [Panel.show] contentViewController is nil or wrong type!")
         }
@@ -105,7 +105,7 @@ class SiblingSelectorPanel: NSPanel {
             print("🎯 [Panel.show] isKeyWindow (async): \(self.isKeyWindow)")
 
             // Make table view first responder after panel becomes key
-            if let viewController = self.contentViewController as? SiblingSelectorViewController {
+            if let viewController = self.contentViewController as? ParentSelectorViewController {
                 print("🎯 [Panel.show] Calling focusTableView() in async block...")
                 viewController.focusTableView()
             } else {
