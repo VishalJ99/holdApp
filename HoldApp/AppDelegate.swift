@@ -253,8 +253,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             isCompleted: false
         )
 
-        // Update current task if switching
-        if switchTo {
+        // Auto-set as current if: explicitly requested OR no current task exists (empty state)
+        let shouldSetAsCurrent = switchTo || AppState.shared.currentTask == nil
+
+        if shouldSetAsCurrent {
             AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
 
             // Update pointer with display info (top-level has no hierarchy)
