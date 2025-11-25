@@ -923,21 +923,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // HIERARCHICAL NAVIGATION ALGORITHM
         // Priority: siblings (oldest→newest) → parent → parent's siblings → next root → deepest/oldest leaf
 
-        // Step 1: Try next sibling in creation order
+        // Step 1: Try next sibling in creation order (using timestamp comparison)
         if let parentId = parentId {
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)  // Already sorted ASC
+            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)  // Sorted ASC by timestamp
 
-            // Find current task's position among siblings
-            if let currentIndex = siblings.firstIndex(where: { $0.id == current.id }) {
-                // Check if there's a next sibling
-                let nextIndex = currentIndex + 1
-                if nextIndex < siblings.count {
-                    let nextSibling = siblings[nextIndex]
-                    print("✅ [Dismiss] Found next sibling in order: \(nextSibling.text)")
-                    navigateToTask(task: nextSibling, reason: "next sibling")
-                    ToastManager.shared.show("Task cleared", type: .success)
-                    return
-                }
+            // Find first sibling created AFTER the deleted task
+            if let nextSibling = siblings.first(where: { $0.timestamp > taskTimestamp }) {
+                print("✅ [Dismiss] Found next sibling by timestamp: \(nextSibling.text)")
+                navigateToTask(task: nextSibling, reason: "next sibling")
+                ToastManager.shared.show("Task cleared", type: .success)
+                return
             }
 
             print("ℹ️ [Dismiss] No more siblings - moving up hierarchy")
