@@ -1,7 +1,7 @@
 # Hold - System Architecture
 
-**Last Updated**: December 2024
-**Version**: v2 (Local-First + Customizable Hotkeys)
+**Last Updated**: November 2024
+**Version**: v2.1 (Local-First + Leaf View + Parent Selector)
 
 ---
 
@@ -29,7 +29,7 @@ Hold is a local-first task management app with CloudKit synchronization for iPho
 - **LocalTaskStore.swift** - Singleton managing `tasks.json`
   - All task CRUD operations happen locally (instant, no network lag)
   - Synchronous API - no callbacks, no DispatchGroups
-  - Functions: `saveTask()`, `fetchRoots()`, `fetchSiblings()`, `fetchTaskById()`, `fetchLatestInTree()`, `clearAllTasks()`, `deleteTask()`, `hasChildren()`, `updateTaskText()`
+  - Functions: `saveTask()`, `fetchRoots()`, `fetchSiblings()`, `fetchTaskById()`, `fetchLatestInTree()`, `clearAllTasks()`, `deleteTask()`, `hasChildren()`, `updateTaskText()`, `fetchLeaves()`, `fetchAllTasksInHierarchy()`
 
 **❌ Removed from CloudKit**:
 - Task records - NO LONGER SAVED TO CLOUDKIT
@@ -100,7 +100,7 @@ Root/Sibling Selection:
 
 **5 Global Hotkeys** (all customizable via Preferences):
 1. **Show Spotlight** (default: Cmd+Shift+Space)
-2. **Sibling Selector** (default: Cmd+Shift+S)
+2. **Leaf Selector** (default: Cmd+Shift+S) - shows all leaf tasks in current root
 3. **Root Selector** (default: Cmd+Shift+R)
 4. **Dismiss Task** (default: Cmd+Shift+D)
 5. **Nuke All Tasks** (default: Cmd+Shift+Backspace - requires 2 presses)
@@ -152,13 +152,77 @@ Root/Sibling Selection:
 - `nukeConfirmationTimer` (3 second timeout)
 - Calls `LocalTaskStore.clearAllTasks()` + `CloudKitManager.clearCurrentTaskPointer()`
 
-### 6. Sibling/Root Selectors
+### 6. Leaf Selector (Cmd+Shift+S)
 
-**Sibling Selector (Cmd+Shift+S)**:
-- Shows table of siblings (tasks with same parent)
-- Fetches via `LocalTaskStore.fetchSiblings()`
+**Purpose**: Switch to any actionable (leaf) task in current root
+
+**Behavior**:
+- Shows all leaf tasks in the current root hierarchy (not just siblings)
+- Leaf = task with no children (actionable endpoints)
+- Fetches via `LocalTaskStore.fetchLeaves(rootId)`
 - Arrow keys navigate, Enter selects
 - Updates current task pointer on selection
+
+**Why Leaf instead of Sibling?**
+- Siblings = limited to same parent (too restrictive)
+- Leaves = all actionable tasks across entire tree (more useful)
+- Allows jumping between branches while staying in same root
+
+**Example Tree**:
+```
+Root: "Complete hold app"
+  ├─ "Add hotkeys"
+  │   └─ "Test hotkeys" ← LEAF
+  └─ "Add preferences"
+      └─ "Design UI" ← LEAF
+```
+Leaf Selector shows both "Test hotkeys" AND "Design UI" (any leaf in root)
+
+**Implementation** (`AppDelegate.showLeafSelector()`):
+- Gets rootId from current task
+- Calls `fetchLeaves(rootId)` to get all leaves
+- Displays in `LeafSelectorPanel`
+- Highlights current task if it's a leaf
+
+### 7. Parent Selector (Cmd+P in Spotlight)
+
+**Purpose**: Select any task in hierarchy as parent for new task creation
+
+**Trigger**: Press Cmd+P while typing in Spotlight
+
+**Workflow**:
+1. User types task text in Spotlight
+2. Presses Cmd+P → Spotlight hides, Parent Selector opens
+3. Shows ALL tasks in current root (sorted by depth: root → deepest)
+4. User arrows to desired parent, presses:
+   - **Enter** → Creates child of selected parent (no switch)
+   - **Ctrl+Enter** → Creates child of selected parent + switches to it
+   - **Escape** → Cancels, returns to Spotlight with text preserved
+5. Task created immediately, both panels close
+
+**Key Features**:
+- Shows entire hierarchy flattened (root, siblings, cousins, all tasks)
+- Current task highlighted but selectable (can create child of current)
+- Text preserved when opening/closing selector
+- Parent selection persists if user reopens with Cmd+P
+
+**Implementation**:
+- `LocalTaskStore.fetchAllTasksInHierarchy(taskId)` - returns all tasks sorted by depth
+- `ParentSelectorViewController` - displays list, handles Enter/Ctrl+Enter
+- `ParentSelectorPanel` - floating panel UI
+- `SpotlightViewController` - tracks `selectedParentId` and `preservedText`
+- `AppDelegate.createTaskWithCustomParent()` - creates child of selected parent
+
+**Use Case**:
+User deep in tree wants to create sibling of root without navigating up:
+```
+Currently on: "Test hotkey manager" (depth 2)
+Wants to create: Sibling of "Complete hold app" (root)
+Solution: Cmd+P → Select "Complete hold app" → Enter
+Result: New task created as child of root
+```
+
+### 8. Root Selector (Cmd+Shift+R)
 
 **Root Selector (Cmd+Shift+R)**:
 - Shows table of root tasks (parent_id == nil)
@@ -166,7 +230,7 @@ Root/Sibling Selection:
 - Arrow keys navigate, Enter selects
 - Updates current task pointer on selection
 
-### 7. Menu Bar Icon
+### 9. Menu Bar Icon
 
 **Icon Design**: `{...}` curly braces (176×176 PNG for retina)
 **Location**: `Assets.xcassets/hold_icon.imageset/`
@@ -215,6 +279,8 @@ User presses Cmd+Shift+Space
 - `saveTask(task)` - Add/update task in JSON
 - `fetchRoots()` - Get all tasks where parent_id == nil
 - `fetchSiblings(taskId)` - Get all tasks with same parent
+- `fetchLeaves(rootId)` - Get all leaf tasks (no children) in a root
+- `fetchAllTasksInHierarchy(taskId)` - Get all tasks in same root, sorted by depth
 - `fetchTaskById(id)` - Lookup single task
 - `deleteTask(id)` - Remove task from JSON
 - `hasChildren(taskId)` - Check if task has children (blocks dismissal)
@@ -518,10 +584,12 @@ HoldApp/
 │   ├── EntryModifierViewController.swift    # Entry modifiers tab (dropdowns)
 │   ├── SpotlightViewController.swift        # Task input field controller
 │   ├── SpotlightPanel.swift                 # Floating window for Spotlight
-│   ├── SubmitTextField.swift                # Custom NSTextField (modifier detection)
-│   ├── SiblingSelectorViewController.swift  # Sibling table controller
-│   ├── SiblingSelectorPanel.swift           # Floating window for siblings
-│   ├── SiblingTableView.swift               # Custom NSTableView (keyboard handling)
+│   ├── SubmitTextField.swift                # Custom NSTextField (modifier + Cmd+P detection)
+│   ├── LeafSelectorViewController.swift     # Leaf task table controller
+│   ├── LeafSelectorPanel.swift              # Floating window for leaf selector
+│   ├── LeafTableView.swift                  # Custom NSTableView (keyboard handling)
+│   ├── ParentSelectorViewController.swift   # Parent selection table controller
+│   ├── ParentSelectorPanel.swift            # Floating window for parent selector
 │   ├── RootSelectorViewController.swift     # Root table controller
 │   ├── RootSelectorPanel.swift              # Floating window for roots
 │   ├── RootTableView.swift                  # Custom NSTableView (keyboard handling)
