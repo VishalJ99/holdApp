@@ -12,18 +12,15 @@ class SpotlightPanel: NSPanel {
 
         // Configure panel for Spotlight-like behavior
         self.level = .floating
-        self.isMovableByWindowBackground = false
+        self.isMovableByWindowBackground = true
         self.hidesOnDeactivate = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.95)
-        self.hasShadow = true
+        
+        // Ensure window itself is transparent so the view's shape is visible
+        self.backgroundColor = NSColor.clear
         self.isOpaque = false
-
-        // Round corners
-        self.contentView?.wantsLayer = true
-        self.contentView?.layer?.cornerRadius = 12
-        self.contentView?.layer?.masksToBounds = true
-
+        self.hasShadow = true
+        
         // Center on screen
         self.center()
     }

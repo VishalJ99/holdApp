@@ -68,14 +68,46 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         // Handled by SpotlightPanel
     }
 
-    override func loadView() {
-        // Create the main view
-        self.view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 60))
+    override func viewDidAppear() {
+        super.viewDidAppear()
+        // Force window to recalculate shadow based on the pill-shaped content
+        view.window?.invalidateShadow()
+        view.window?.backgroundColor = .clear // Double check
+    }
 
-        // Create custom text field with modifier key support
-        textField = SubmitTextField(frame: NSRect(x: 20, y: 15, width: 560, height: 30))
-        textField.placeholderString = "What task are you holding?"
-        textField.font = NSFont.systemFont(ofSize: 18)
+    override func loadView() {
+        // 1. Create a transparent container view as the root view
+        // This ensures the window's content view is just a clear canvas
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 60))
+        containerView.wantsLayer = true
+        containerView.layer?.backgroundColor = NSColor.clear.cgColor
+        containerView.layer?.masksToBounds = false // Allow shadow to flow outside if needed (though window shadow handles it)
+        
+        self.view = containerView
+
+        // 2. Create the Visual Effect View (The Pill)
+        // This is now a subview, strictly defined as the pill shape
+        let visualEffectView = NSVisualEffectView(frame: containerView.bounds)
+        visualEffectView.autoresizingMask = [.width, .height] // Resize with container
+        visualEffectView.material = .popover
+        visualEffectView.state = .active
+        visualEffectView.blendingMode = .behindWindow
+        
+        // Configure layer for pill shape
+        visualEffectView.wantsLayer = true
+        visualEffectView.layer?.cornerRadius = 30
+        visualEffectView.layer?.cornerCurve = .continuous
+        visualEffectView.layer?.masksToBounds = true // Clip the blur to the pill shape
+        visualEffectView.layer?.borderWidth = 1.0
+        visualEffectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        
+        containerView.addSubview(visualEffectView)
+
+        // 3. Create custom text field
+        textField = SubmitTextField(frame: NSRect(x: 20, y: 12, width: 560, height: 36))
+        textField.placeholderString = "Hold..."
+        textField.font = NSFont.systemFont(ofSize: 24, weight: .light)
+        textField.textColor = .white
         textField.isBordered = false
         textField.focusRingType = .none
         textField.backgroundColor = .clear
@@ -91,7 +123,13 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             self?.handleParentSelectorRequest()
         }
 
-        view.addSubview(textField)
+        // Add text field to the container (on top of visual effect view)
+        // Note: We add it to containerView so it's not clipped if we ever want it to pop out, 
+        // but visually it sits 'on' the pill. 
+        // Actually, better to add to visualEffectView to ensure it moves with it? 
+        // No, visualEffectView clips. If text field is inside, it's clipped. That's fine.
+        // Let's add it to containerView to be safe, but ensure z-order.
+        containerView.addSubview(textField)
     }
 
     private func handleParentSelectorRequest() {
@@ -237,7 +275,13 @@ extension SpotlightViewController: NSTextFieldDelegate {
         isEditMode = false
         editingTaskId = nil
         textField.stringValue = ""
-        textField.placeholderString = "What task are you holding?"
+        textField.placeholderString = "Hold..."
         print("🔄 [Edit Mode] Reset")
+    }
+    func control(_ control: NSControl, textShouldBeginEditing fieldEditor: NSText) -> Bool {
+        if let textView = fieldEditor as? NSTextView {
+            textView.insertionPointColor = .white
+        }
+        return true
     }
 }
