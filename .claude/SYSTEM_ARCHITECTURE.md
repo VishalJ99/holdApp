@@ -128,17 +128,27 @@ Root/Sibling Selection:
 
 ### 4. Edit Mode (Up Arrow)
 
-**Trigger**: Press Up Arrow in empty Spotlight field
+**Trigger**: Press Up Arrow in Spotlight field
 
 **Behavior**:
 - Loads current task text into input field
+- Changes placeholder to "Editing task... (Press Enter to save)"
 - Disables modifier keys (only plain Enter works)
 - Enter → Updates task text via `LocalTaskStore.updateTaskText()`
-- Escape → Cancels edit mode, clears field
+- Escape → Hides panel (edit mode reset on next show)
+- Down Arrow → Exits edit mode, clears field
 
-**Implementation** (`SpotlightViewController.swift:127-155`):
-- Stores `isEditMode` flag and `editingTaskId`
-- Routes to `onTaskUpdate` callback instead of `onTaskSubmit`
+**State Management** (`SpotlightViewController.swift`):
+- `isEditMode: Bool` - tracks whether editing
+- `editingTaskId: String?` - ID of task being edited
+- `resetEditMode()` - clears all edit state (called by Down Arrow, focusTextField)
+- `focusTextField()` - always calls `resetEditMode()` on panel show (guards against stale state)
+
+**Implementation Notes**:
+- Edit mode entry: `loadCurrentTask()` (line ~265) sets state from `AppState.shared.currentTask`
+- Edit mode exit via Enter: `handleTaskUpdate()` calls `resetEditMode()` after save
+- Edit mode exit via Down Arrow: `doCommandBy` handler calls `resetEditMode()` (line ~258)
+- Edit mode exit via Escape: Panel intercepts Escape directly; `focusTextField()` resets on next show
 
 ### 5. Nuke Button (Cmd+Shift+Backspace)
 

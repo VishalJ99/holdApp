@@ -149,8 +149,10 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     }
 
     func focusTextField() {
+        // Always reset edit mode on show - guards against stale state from
+        // Escape (which bypasses onCancel) or other unexpected exit paths
+        resetEditMode()
         view.window?.makeFirstResponder(textField)
-        textField.stringValue = ""
     }
 
     func restorePreservedText() {
@@ -252,9 +254,9 @@ extension SpotlightViewController: NSTextFieldDelegate {
             return true
         }
 
-        // Handle Down Arrow - clear text
+        // Handle Down Arrow - exit edit mode and clear text
         if commandSelector == #selector(NSResponder.moveDown(_:)) {
-            textField.stringValue = ""
+            resetEditMode()  // Resets isEditMode, editingTaskId, text, and placeholder
             return true
         }
 
