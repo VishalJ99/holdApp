@@ -4,7 +4,7 @@ class SpotlightPanel: NSPanel {
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 600, height: 60),
+            contentRect: NSRect(x: 0, y: 0, width: 600, height: 90),
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false

@@ -3,6 +3,8 @@ import Cocoa
 class SpotlightViewController: NSViewController, TaskInputUI {
 
     private var textField: SubmitTextField!
+    private var flapView: NSVisualEffectView!
+    private var pencilIconView: NSImageView!
 
     // MARK: - Edit Mode State
 
@@ -77,18 +79,48 @@ class SpotlightViewController: NSViewController, TaskInputUI {
 
     override func loadView() {
         // 1. Create a transparent container view as the root view
-        // This ensures the window's content view is just a clear canvas
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 60))
+        // Increased height to 90 to accommodate the flap (60 pill + 30 flap space)
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 90))
         containerView.wantsLayer = true
         containerView.layer?.backgroundColor = NSColor.clear.cgColor
-        containerView.layer?.masksToBounds = false // Allow shadow to flow outside if needed (though window shadow handles it)
+        containerView.layer?.masksToBounds = false
         
         self.view = containerView
 
-        // 2. Create the Visual Effect View (The Pill)
-        // This is now a subview, strictly defined as the pill shape
-        let visualEffectView = NSVisualEffectView(frame: containerView.bounds)
-        visualEffectView.autoresizingMask = [.width, .height] // Resize with container
+        // 2. Create the Flap View (Behind the pill)
+        // Centered, sticking out from the bottom
+        let flapWidth: CGFloat = 140
+        let flapHeight: CGFloat = 40 // 30 visible + 10 overlap
+        let flapX = (600 - flapWidth) / 2
+        
+        flapView = NSVisualEffectView(frame: NSRect(x: flapX, y: 0, width: flapWidth, height: flapHeight))
+        flapView.material = .popover
+        flapView.state = .active
+        flapView.blendingMode = .behindWindow
+        flapView.wantsLayer = true
+        flapView.layer?.cornerRadius = 12
+        flapView.layer?.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner] // Round bottom corners
+        flapView.alphaValue = 0 // Hidden by default
+        
+        // Add "Editing" Label (Centered in flap)
+        let label = NSTextField(labelWithString: "Editing")
+        label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
+        label.textColor = NSColor.white.withAlphaComponent(0.9)
+        label.sizeToFit()
+        
+        // Center label in flap
+        label.frame.origin = CGPoint(
+            x: (flapWidth - label.frame.width) / 2,
+            y: 10
+        )
+        flapView.addSubview(label)
+        
+        containerView.addSubview(flapView)
+
+        // 3. Create the Main Pill (Visual Effect View)
+        // Moved up by 30 to make room for flap
+        let visualEffectView = NSVisualEffectView(frame: NSRect(x: 0, y: 30, width: 600, height: 60))
+        visualEffectView.autoresizingMask = [.width] // Resize with container width
         visualEffectView.material = .popover
         visualEffectView.state = .active
         visualEffectView.blendingMode = .behindWindow
@@ -97,14 +129,36 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         visualEffectView.wantsLayer = true
         visualEffectView.layer?.cornerRadius = 30
         visualEffectView.layer?.cornerCurve = .continuous
-        visualEffectView.layer?.masksToBounds = true // Clip the blur to the pill shape
+        visualEffectView.layer?.masksToBounds = true
         visualEffectView.layer?.borderWidth = 1.0
         visualEffectView.layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
         
         containerView.addSubview(visualEffectView)
 
-        // 3. Create custom text field
-        textField = SubmitTextField(frame: NSRect(x: 20, y: 12, width: 560, height: 36))
+        // 3.5 Create Pencil Icon (Inside Pill, LHS)
+        // Positioned at x=20, centered vertically in the pill (y=30 to y=90 -> height 60)
+        // Pill Y starts at 30. Center is 30 + 30 = 60.
+        // 3.5 Create Pencil Icon (Inside Pill, LHS)
+        // Positioned at x=20, centered vertically in the pill (y=30 to y=90 -> height 60)
+        // Pill Y starts at 30. Center is 30 + 30 = 60.
+        // 3.5 Create Pencil Icon (Inside Pill, LHS)
+        // Positioned at x=20, centered vertically in the pill (y=30 to y=90 -> height 60)
+        // Pill Y starts at 30. Center is 30 + 30 = 60.
+        // Icon size 24 (25% larger). Y = 60 - 12 = 48.
+        pencilIconView = NSImageView(frame: NSRect(x: 20, y: 48, width: 24, height: 24))
+        
+        // Use SymbolConfiguration to make the glyph fill the frame better (less internal padding)
+        // Increased point size to 22 (approx 25% larger than 18)
+        let config = NSImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
+        pencilIconView.image = NSImage(systemSymbolName: "pencil", accessibilityDescription: "Edit")?.withSymbolConfiguration(config)
+        
+        pencilIconView.contentTintColor = NSColor.white.withAlphaComponent(0.9)
+        pencilIconView.isHidden = true // Hidden by default
+        containerView.addSubview(pencilIconView)
+
+        // 4. Create custom text field
+        // Adjusted Y position to 42 (12 + 30)
+        textField = SubmitTextField(frame: NSRect(x: 20, y: 42, width: 560, height: 36))
         textField.placeholderString = "Hold..."
         textField.font = NSFont.systemFont(ofSize: 24, weight: .light)
         textField.textColor = .white
@@ -123,12 +177,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             self?.handleParentSelectorRequest()
         }
 
-        // Add text field to the container (on top of visual effect view)
-        // Note: We add it to containerView so it's not clipped if we ever want it to pop out, 
-        // but visually it sits 'on' the pill. 
-        // Actually, better to add to visualEffectView to ensure it moves with it? 
-        // No, visualEffectView clips. If text field is inside, it's clipped. That's fine.
-        // Let's add it to containerView to be safe, but ensure z-order.
+        // Add text field to the container
         containerView.addSubview(textField)
     }
 
@@ -270,6 +319,7 @@ extension SpotlightViewController: NSTextFieldDelegate {
             isEditMode = true
             editingTaskId = current.id
             print("✏️ [Edit Mode] Enabled - editing task: \(current.id)")
+            updateEditModeUI(isEditing: true)
         }
     }
 
@@ -279,6 +329,25 @@ extension SpotlightViewController: NSTextFieldDelegate {
         textField.stringValue = ""
         textField.placeholderString = "Hold..."
         print("🔄 [Edit Mode] Reset")
+        updateEditModeUI(isEditing: false)
+    }
+
+    private func updateEditModeUI(isEditing: Bool) {
+        // No animation - instant update
+        flapView.alphaValue = isEditing ? 1.0 : 0.0
+        flapView.frame.origin.y = 0
+        
+        // Toggle pencil
+        pencilIconView.isHidden = !isEditing
+        
+        // Shift text field
+        // Normal: x=20, width=560
+        // Editing: x=54 (20 + 24 + 10 padding), width=526
+        if isEditing {
+            textField.frame = NSRect(x: 54, y: 42, width: 526, height: 36)
+        } else {
+            textField.frame = NSRect(x: 20, y: 42, width: 560, height: 36)
+        }
     }
     func control(_ control: NSControl, textShouldBeginEditing fieldEditor: NSText) -> Bool {
         if let textView = fieldEditor as? NSTextView {

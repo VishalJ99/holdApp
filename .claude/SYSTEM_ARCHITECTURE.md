@@ -133,10 +133,11 @@ Root/Sibling Selection:
 **Behavior**:
 - Loads current task text into input field
 - Changes placeholder to "Editing task... (Press Enter to save)"
+- Shows "Editing" flap below the main pill (pencil icon + text)
 - Disables modifier keys (only plain Enter works)
 - Enter → Updates task text via `LocalTaskStore.updateTaskText()`
 - Escape → Hides panel (edit mode reset on next show)
-- Down Arrow → Exits edit mode, clears field
+- Down Arrow → Exits edit mode, hides flap, clears field
 
 **State Management** (`SpotlightViewController.swift`):
 - `isEditMode: Bool` - tracks whether editing
