@@ -134,8 +134,14 @@ class ParentSelectorViewController: NSViewController {
 
 extension ParentSelectorViewController: LeafTableViewDelegate {
     func leafTableViewDidPressEnter(_ tableView: LeafTableView) {
-        // This won't be called because performKeyEquivalent intercepts Enter first
-        // Keeping for compatibility with protocol
+        // Plain Enter = create child without switching (shouldSwitch: false)
+        // Ctrl+Enter is handled by performKeyEquivalent (shouldSwitch: true)
+        let selectedRow = tableView.selectedRow
+        if selectedRow >= 0 && selectedRow < parents.count {
+            let parent = parents[selectedRow]
+            print("⏎ Enter pressed - selecting parent: \(parent.text)")
+            onParentSelected?(parent.id, parent.text, false)
+        }
     }
 
     func leafTableViewDidPressEscape(_ tableView: LeafTableView) {
