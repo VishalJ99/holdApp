@@ -14,7 +14,7 @@ class ParentSelectorViewController: NSViewController {
 
     private var tableView: LeafTableView!  // Reuse LeafTableView for keyboard handling
     private var scrollView: NSScrollView!
-    private var parents: [(id: String, text: String)] = []
+    private var parents: [LocalTaskStore.TreeTask] = []
     private var currentIndex: Int = -1  // Index of current task in the list
 
     /// Called when user selects a parent (presses Enter or Ctrl+Enter)
@@ -46,8 +46,8 @@ class ParentSelectorViewController: NSViewController {
         tableView.backgroundColor = .clear
         tableView.gridStyleMask = []
         tableView.headerView = nil
-        tableView.intercellSpacing = NSSize(width: 0, height: 4)
-        tableView.rowHeight = 32
+        tableView.intercellSpacing = NSSize(width: 0, height: 0) // No gap between cells for continuous lines
+        tableView.rowHeight = 36 // Increased height to maintain breathing room
         tableView.selectionHighlightStyle = .regular
         tableView.allowsEmptySelection = false
         tableView.delegate = self
@@ -69,8 +69,8 @@ class ParentSelectorViewController: NSViewController {
     // MARK: - Public Methods
 
     /// Update the list of parents and current task index
-    /// parents array should be ordered: [root, ..., parent, current]
-    func updateParents(_ parents: [(id: String, text: String)], currentIndex: Int) {
+    /// parents array should be ordered by DFS tree traversal
+    func updateParents(_ parents: [LocalTaskStore.TreeTask], currentIndex: Int) {
         self.parents = parents
         self.currentIndex = currentIndex
 
@@ -106,7 +106,7 @@ class ParentSelectorViewController: NSViewController {
         if selectedRow >= 0 && selectedRow < parents.count {
             let parent = parents[selectedRow]
             // Double-click = Enter (no switch)
-            onParentSelected?(parent.id, parent.text, false)
+            onParentSelected?(parent.task.id, parent.task.text, false)
         }
     }
 
@@ -119,9 +119,9 @@ class ParentSelectorViewController: NSViewController {
 
             if selectedRow >= 0 && selectedRow < parents.count {
                 let parent = parents[selectedRow]
-                print("⏎ Enter pressed (Ctrl: \(hasCtrl)) - selecting parent: \(parent.text)")
+                print("⏎ Enter pressed (Ctrl: \(hasCtrl)) - selecting parent: \(parent.task.text)")
                 // Ctrl+Enter = create and switch, plain Enter = create only
-                onParentSelected?(parent.id, parent.text, hasCtrl)
+                onParentSelected?(parent.task.id, parent.task.text, hasCtrl)
                 return true
             }
         }
@@ -139,8 +139,8 @@ extension ParentSelectorViewController: LeafTableViewDelegate {
         let selectedRow = tableView.selectedRow
         if selectedRow >= 0 && selectedRow < parents.count {
             let parent = parents[selectedRow]
-            print("⏎ Enter pressed - selecting parent: \(parent.text)")
-            onParentSelected?(parent.id, parent.text, false)
+            print("⏎ Enter pressed - selecting parent: \(parent.task.text)")
+            onParentSelected?(parent.task.id, parent.task.text, false)
         }
     }
 
@@ -164,23 +164,60 @@ extension ParentSelectorViewController: NSTableViewDelegate {
     func tableView(_ tableView: NSTableView, viewFor tableColumn: NSTableColumn?, row: Int) -> NSView? {
         guard row >= 0 && row < parents.count else { return nil }
 
-        let parent = parents[row]
+        let treeTask = parents[row]
         let isCurrent = (row == currentIndex)
-        let position = row + 1
-        let total = parents.count
+        
+        // 1. Create Cell View
+        // Use rowHeight from tableView (36)
+        let cellView = NSView(frame: NSRect(x: 0, y: 0, width: tableView.bounds.width, height: 36))
 
-        // Create cell view
-        let cellView = NSView(frame: NSRect(x: 0, y: 0, width: tableView.bounds.width, height: 32))
-
-        // Create label with position indicator
-        let label = NSTextField(labelWithString: "[\(position)/\(total)] \(parent.text)")
-        label.font = isCurrent ? NSFont.systemFont(ofSize: 14, weight: .semibold) : NSFont.systemFont(ofSize: 14, weight: .regular)
-        label.textColor = isCurrent ? .white : NSColor.white.withAlphaComponent(0.7)
-        label.lineBreakMode = .byTruncatingTail
-        label.frame = NSRect(x: 20, y: 6, width: tableView.bounds.width - 40, height: 20)
-        label.refusesFirstResponder = true  // Prevent label from stealing keyboard focus from table view
-
-        cellView.addSubview(label)
+        // 2. Tree Line View (Custom Drawing)
+        // Width needed: depth * indent. If depth=0, width=0.
+        // Let's give it enough width to cover the indentation.
+        let indent: CGFloat = 20
+        // Shift x to 10 so the vertical line (at indent/2 = 10) aligns with the parent's icon (at 20)
+        // Width: depth * indent + extra to reach near the icon
+        // Also need width for the descender line of the current node (if it has children)
+        // The descender line is at x = depth * indent + halfIndent
+        let treeWidth = CGFloat(max(1, treeTask.depth + 1)) * indent + 10
+        let treeView = TreeLineView(frame: NSRect(x: 10, y: 0, width: treeWidth, height: 36))
+        treeView.treeTask = treeTask
+        treeView.indent = indent
+        cellView.addSubview(treeView)
+        
+        // 3. Determine Icon
+        let iconString = (treeTask.depth == 0) ? "▼" : "●"
+        
+        // 4. Icon Label
+        let iconLabel = NSTextField(labelWithString: iconString)
+        iconLabel.font = NSFont.systemFont(ofSize: 10, weight: .regular)
+        iconLabel.textColor = (treeTask.depth == 0) ? NSColor.white : NSColor.white.withAlphaComponent(0.5)
+        iconLabel.sizeToFit()
+        
+        // Position icon:
+        // Root (depth 0): x = 20.
+        // Child (depth 1): x = 20 + 20 = 40.
+        let iconX: CGFloat = 20 + CGFloat(treeTask.depth) * indent
+        
+        // Center vertically.
+        // For root "▼" (height ~12), y should be ~12 (in 36 height).
+        // For bullet "●" (height ~10), y should be ~13.
+        let iconY: CGFloat = (treeTask.depth == 0) ? 12 : 13
+        iconLabel.frame.origin = CGPoint(x: iconX, y: iconY)
+        cellView.addSubview(iconLabel)
+        
+        // 5. Text Label
+        let textLabel = NSTextField(labelWithString: treeTask.task.text)
+        textLabel.font = isCurrent ? NSFont.systemFont(ofSize: 14, weight: .semibold) : NSFont.systemFont(ofSize: 14, weight: .regular)
+        textLabel.textColor = isCurrent ? .white : NSColor.white.withAlphaComponent(0.7)
+        textLabel.lineBreakMode = .byTruncatingTail
+        
+        let textX = iconLabel.frame.maxX + 8
+        let remainingWidth = tableView.bounds.width - textX - 20
+        textLabel.frame = NSRect(x: textX, y: 8, width: remainingWidth, height: 20)
+        textLabel.refusesFirstResponder = true
+        
+        cellView.addSubview(textLabel)
 
         return cellView
     }
@@ -192,7 +229,86 @@ extension ParentSelectorViewController: NSTableViewDelegate {
     func tableViewSelectionDidChange(_ notification: Notification) {
         let selectedRow = tableView.selectedRow
         if selectedRow >= 0 && selectedRow < parents.count {
-            print("🔵 Selected parent: \(parents[selectedRow].text)")
+            print("🔵 Selected parent: \(parents[selectedRow].task.text)")
         }
     }
+}
+
+// MARK: - Custom Views
+
+class TreeLineView: NSView {
+    var treeTask: LocalTaskStore.TreeTask?
+    var indent: CGFloat = 20
+    
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        
+        guard let treeTask = treeTask else { return }
+        
+        let path = NSBezierPath()
+        path.lineWidth = 1.0
+        NSColor.white.withAlphaComponent(0.3).setStroke()
+        
+        // Center of a column
+        let halfIndent = indent / 2
+        
+        // 1. Draw Ancestor Lines
+        if treeTask.depth > 0 {
+            // Iterate columns 0 to depth-2
+            for i in 0..<(treeTask.depth - 1) {
+                if i + 1 < treeTask.ancestorsAreLast.count {
+                    let isLast = treeTask.ancestorsAreLast[i + 1]
+                    if !isLast {
+                        // Draw full vertical line
+                        let x = CGFloat(i) * indent + halfIndent
+                        path.move(to: NSPoint(x: x, y: 0))
+                        path.line(to: NSPoint(x: x, y: bounds.height))
+                    }
+                }
+            }
+            
+            // 2. Draw Current Node Connector (L or T shape)
+            // This is at column index = depth - 1
+            let col = treeTask.depth - 1
+            let x = CGFloat(col) * indent + halfIndent
+            let centerY = bounds.height / 2
+            
+            // Horizontal line: from center to right edge
+            path.move(to: NSPoint(x: x, y: centerY))
+            
+            // Calculate end point (center of icon - gap)
+            // Icon is at: halfIndent + depth * indent relative to this view
+            let iconCenterX = halfIndent + CGFloat(treeTask.depth) * indent
+            let gap: CGFloat = 6.0
+            path.line(to: NSPoint(x: iconCenterX - gap, y: centerY))
+            
+            // Vertical line
+            path.move(to: NSPoint(x: x, y: 0)) // Start from top
+            if treeTask.isLast {
+                // Stop at center
+                path.line(to: NSPoint(x: x, y: centerY))
+            } else {
+                // Go all the way down
+                path.line(to: NSPoint(x: x, y: bounds.height))
+            }
+        }
+        
+        // 3. Draw Descender Line (if has children)
+        // This connects this node to its first child
+        if treeTask.hasChildren {
+            // Descender is at the NEXT column index
+            let col = treeTask.depth
+            let x = CGFloat(col) * indent + halfIndent
+            let centerY = bounds.height / 2
+            
+            // Draw from center downwards
+            path.move(to: NSPoint(x: x, y: centerY))
+            path.line(to: NSPoint(x: x, y: bounds.height))
+        }
+        
+        path.stroke()
+    }
+    
+    // Ensure view is transparent
+    override var isOpaque: Bool { false }
 }

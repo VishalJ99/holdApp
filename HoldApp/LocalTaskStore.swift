@@ -293,10 +293,19 @@ class LocalTaskStore {
         return leaves.sorted { $0.timestamp < $1.timestamp }
     }
 
+    /// Structure to hold task with tree metadata for rendering
+    struct TreeTask {
+        let task: Task
+        let depth: Int
+        let isLast: Bool
+        let ancestorsAreLast: [Bool] // Tracks if ancestor at each depth was the last child
+        let hasChildren: Bool
+    }
+
     /// Fetch all tasks in the same root hierarchy as the given task
-    /// Returns array ordered by depth (root first, then by creation timestamp within each level)
-    /// Used for Parent Selector (Cmd+P in Spotlight) - shows all possible parents
-    func fetchAllTasksInHierarchy(taskId: String) -> (tasks: [Task], currentIndex: Int) {
+    /// Returns array ordered by DFS (tree order)
+    /// Used for Parent Selector (Cmd+P in Spotlight) - shows all possible parents in tree structure
+    func fetchAllTasksInHierarchy(taskId: String) -> (tasks: [TreeTask], currentIndex: Int) {
         let allTasks = fetchAllTasks()
 
         // Find the current task
@@ -309,41 +318,52 @@ class LocalTaskStore {
 
         // Fetch all tasks in this root (including the root itself)
         let tasksInRoot = allTasks.filter { $0.root_id == rootId || $0.id == rootId }
-
-        // Calculate depth for each task
-        var taskDepths: [String: Int] = [:]
-        for task in tasksInRoot {
-            var depth = 0
-            var currentId = task.parent_id
-
-            // Walk up to root, counting levels
-            while let parentId = currentId {
-                depth += 1
-                if let parentTask = allTasks.first(where: { $0.id == parentId }) {
-                    currentId = parentTask.parent_id
-                } else {
-                    break
-                }
-            }
-
-            taskDepths[task.id] = depth
+        
+        // Find the root task
+        guard let rootTask = tasksInRoot.first(where: { $0.parent_id == nil }) else {
+            return ([], -1)
         }
 
-        // Sort by depth first (ascending), then by timestamp (ascending) within same depth
-        let sortedTasks = tasksInRoot.sorted { task1, task2 in
-            let depth1 = taskDepths[task1.id] ?? 0
-            let depth2 = taskDepths[task2.id] ?? 0
-
-            if depth1 != depth2 {
-                return depth1 < depth2  // Shallower tasks first
-            } else {
-                return task1.timestamp < task2.timestamp  // Older tasks first within same depth
+        var treeTasks: [TreeTask] = []
+        
+        // Recursive function to build tree
+        func buildTree(current: Task, depth: Int, isLast: Bool, ancestorsAreLast: [Bool]) {
+            // Find children
+            let children = tasksInRoot
+                .filter { $0.parent_id == current.id }
+                .sorted { $0.timestamp < $1.timestamp }
+            
+            // Add current task
+            treeTasks.append(TreeTask(
+                task: current,
+                depth: depth,
+                isLast: isLast,
+                ancestorsAreLast: ancestorsAreLast,
+                hasChildren: !children.isEmpty
+            ))
+            
+            // Recurse for children
+            for (index, child) in children.enumerated() {
+                let isLastChild = index == children.count - 1
+                var newAncestors = ancestorsAreLast
+                newAncestors.append(isLast) // Add current node's status for its children
+                
+                buildTree(
+                    current: child,
+                    depth: depth + 1,
+                    isLast: isLastChild,
+                    ancestorsAreLast: newAncestors
+                )
             }
         }
+        
+        // Start building from root
+        // Root is technically the last (and only) item at its level (top level)
+        buildTree(current: rootTask, depth: 0, isLast: true, ancestorsAreLast: [])
 
-        // Find current task index
-        let currentIndex = sortedTasks.firstIndex(where: { $0.id == taskId }) ?? -1
+        // Find current task index in the flattened tree list
+        let currentIndex = treeTasks.firstIndex(where: { $0.task.id == taskId }) ?? -1
 
-        return (sortedTasks, currentIndex)
+        return (treeTasks, currentIndex)
     }
 }

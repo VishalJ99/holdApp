@@ -829,18 +829,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // Fetch all tasks in hierarchy (sorted by depth: root → deepest)
+        // Fetch all tasks in hierarchy (sorted by DFS tree order)
         let (tasksInHierarchy, currentIndex) = LocalTaskStore.shared.fetchAllTasksInHierarchy(taskId: current.id)
-        let taskList = tasksInHierarchy.map { (id: $0.id, text: $0.text) }
-
-        print("✅ [Parent Selector] Found \(taskList.count) tasks in hierarchy")
+        
+        print("✅ [Parent Selector] Found \(tasksInHierarchy.count) tasks in hierarchy")
         print("📊 [Parent Selector] Current task at index: \(currentIndex)")
 
         // Hide Spotlight panel
         spotlightPanel.hide()
 
         // Show parent selector panel
-        parentSelectorPanel.show(parents: taskList, currentIndex: currentIndex)
+        parentSelectorPanel.show(parents: tasksInHierarchy, currentIndex: currentIndex)
     }
 
     private func handleParentSelection(parentId: String, parentText: String, shouldSwitch: Bool) {

@@ -66,7 +66,7 @@ class ParentSelectorPanel: NSPanel {
     }
 
     /// Show the panel with parent list
-    func show(parents: [(id: String, text: String)], currentIndex: Int) {
+    func show(parents: [LocalTaskStore.TreeTask], currentIndex: Int) {
         print("🎯 [Panel.show] Called with \(parents.count) parents, currentIndex: \(currentIndex)")
 
         // Adjust height based on parent count
