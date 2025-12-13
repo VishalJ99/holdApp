@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uvx --from git+https://github.com/oraios/serena index-project:*)",
+      "mcp__grep__searchGitHub",
+      "Bash(git log:*)",
+      "Bash(sips:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "mcp__zen__thinkdeep",
+      "Bash(rm:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

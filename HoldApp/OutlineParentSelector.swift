@@ -160,6 +160,10 @@ struct TreeRowRecursive: View {
         }
     }
 
+    private var isSelected: Bool {
+        selection?.id == item.id
+    }
+
     private var rowContent: some View {
         HStack(spacing: 8) {
             // Icon
@@ -171,15 +175,15 @@ struct TreeRowRecursive: View {
                 } else {
                     Text("●")
                         .font(.system(size: 6))
-                        .foregroundColor(.white.opacity(0.5))
+                        .foregroundColor(isSelected ? .white : .white.opacity(0.5))
                 }
             }
             .frame(width: 14)
 
             // Text
             Text(item.text)
-                .font(.system(size: 14, weight: item.isCurrent ? .semibold : .regular))
-                .foregroundColor(item.isCurrent ? .white : .white.opacity(0.8))
+                .font(.system(size: 14, weight: (item.isCurrent || isSelected) ? .semibold : .regular))
+                .foregroundColor((item.isCurrent || isSelected) ? .white : .white.opacity(0.8))
                 .lineLimit(1)
 
             Spacer()
@@ -195,7 +199,12 @@ struct TreeRowRecursive: View {
                     .cornerRadius(4)
             }
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 6)
+                .fill(isSelected ? Color.white.opacity(0.15) : Color.clear)
+        )
         .contentShape(Rectangle())
         .id(item.id)
         .tag(item)

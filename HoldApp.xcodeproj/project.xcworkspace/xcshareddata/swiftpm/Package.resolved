@@ -1,0 +1,15 @@
+{
+  "originHash" : "455bbb0eed7dd3b3342726e683ac466599002097cb7d6bfbc032ff87a3c8b741",
+  "pins" : [
+    {
+      "identity" : "outlineview",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Sameesunkaria/OutlineView",
+      "state" : {
+        "revision" : "661a32c6f6db1bbb4349048e3d0fcb6afa5a9d26",
+        "version" : "2.0.0"
+      }
+    }
+  ],
+  "version" : 3
+}
