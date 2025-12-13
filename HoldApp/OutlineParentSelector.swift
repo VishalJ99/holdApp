@@ -110,32 +110,19 @@ struct OutlineParentSelectorView: View {
                 }
             }
         }
-        .background(Color.black.opacity(0.95))
+        .background(.ultraThinMaterial)
     }
 
     private var headerView: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "arrow.turn.right.up")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(Color(red: 1.0, green: 0.8, blue: 0.4))
-
-            Text("Select Parent for ")
-                .foregroundColor(.white.opacity(0.5))
-            + Text("\"\(currentTaskName)\"")
-                .foregroundColor(.white)
+        HStack(spacing: 8) {
+            Text("Select Parent")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.6))
 
             Spacer()
-
-            // Keyboard hints
-            HStack(spacing: 16) {
-                KeyHint(key: "↵", label: "Select")
-                KeyHint(key: "⌃↵", label: "Select & Switch")
-                KeyHint(key: "esc", label: "Cancel")
-            }
-            .font(.system(size: 11))
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 14)
+        .padding(.vertical, 12)
     }
 }
 
@@ -183,7 +170,7 @@ struct TreeRowRecursive: View {
             // Text
             Text(item.text)
                 .font(.system(size: 14, weight: (item.isCurrent || isSelected) ? .semibold : .regular))
-                .foregroundColor((item.isCurrent || isSelected) ? .white : .white.opacity(0.8))
+                .foregroundColor((item.isCurrent || isSelected) ? .white : .white.opacity(0.7))
                 .lineLimit(1)
 
             Spacer()
@@ -199,7 +186,7 @@ struct TreeRowRecursive: View {
                     .cornerRadius(4)
             }
         }
-        .padding(.vertical, 6)
+        .frame(height: 32)
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
@@ -222,25 +209,6 @@ struct TreeDisclosureStyle: DisclosureGroupStyle {
             configuration.label
             configuration.content
                 .padding(.leading, 20)
-        }
-    }
-}
-
-// MARK: - Keyboard Hint
-
-struct KeyHint: View {
-    let key: String
-    let label: String
-
-    var body: some View {
-        HStack(spacing: 4) {
-            Text(key)
-                .padding(.horizontal, 4)
-                .padding(.vertical, 2)
-                .background(Color.white.opacity(0.15))
-                .cornerRadius(3)
-            Text(label)
-                .foregroundColor(.white.opacity(0.5))
         }
     }
 }
@@ -441,10 +409,10 @@ struct OutlineParentSelectorContentView: View {
             treeData: model.treeData,
             currentTaskName: model.currentTaskName
         )
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
         )
     }
 }
