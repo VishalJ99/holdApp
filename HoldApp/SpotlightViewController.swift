@@ -16,6 +16,8 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     var selectedParentId: String?
     var selectedParentText: String?
     var preservedText: String?  // Text preserved when opening parent selector
+    var isReparentMode: Bool = false  // True when Cmd+P pressed in edit mode (re-parent existing task)
+    var reparentTaskId: String?  // Task ID being re-parented
 
     // MARK: - TaskInputUI Protocol
 
@@ -189,6 +191,16 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             return
         }
 
+        // Check if we're in edit mode (re-parenting existing task)
+        if isEditMode, let taskId = editingTaskId {
+            isReparentMode = true
+            reparentTaskId = taskId
+            print("🔄 [SpotlightViewController] Re-parent mode: task \(taskId)")
+        } else {
+            isReparentMode = false
+            reparentTaskId = nil
+        }
+
         // Preserve text for when user returns
         preservedText = currentText
         print("📝 [SpotlightViewController] Preserved text: \(currentText)")
@@ -221,6 +233,8 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         selectedParentId = nil
         selectedParentText = nil
         preservedText = nil
+        isReparentMode = false
+        reparentTaskId = nil
         print("🔄 [SpotlightViewController] Cleared parent selection")
     }
 

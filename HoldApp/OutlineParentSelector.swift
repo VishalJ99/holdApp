@@ -267,7 +267,7 @@ class OutlineParentSelectorPanel: NSPanel {
         case 36: // Enter
             if let selected = contentModel.selection {
                 let shouldSwitch = event.modifierFlags.contains(.control)
-                hide()
+                // Don't hide here - let callback decide (for re-parent validation)
                 onParentSelected?(selected.id, selected.text, shouldSwitch)
                 return true
             }

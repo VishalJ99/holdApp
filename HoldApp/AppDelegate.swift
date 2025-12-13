@@ -830,27 +830,122 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func handleParentSelection(parentId: String, parentText: String, shouldSwitch: Bool) {
         print("🔄 [Parent Selection] Selected parent: \(parentText) (ID: \(parentId), switch: \(shouldSwitch))")
 
-        // Hide parent selector
-        outlineParentSelectorPanel.hide()
-
         // Get preserved text from Spotlight
         guard let taskText = spotlightViewController.preservedText else {
             print("❌ [Parent Selection] No preserved text found")
+            outlineParentSelectorPanel.hide()
             return
         }
 
-        // Store parent selection in Spotlight
-        spotlightViewController.setSelectedParent(parentId: parentId, parentText: parentText)
+        // Check if we're re-parenting an existing task
+        if spotlightViewController.isReparentMode, let taskId = spotlightViewController.reparentTaskId {
+            // Prevent task from being its own parent - stay in selector
+            if taskId == parentId {
+                ToastManager.shared.show("⚠️ Task cannot be its own parent", type: .error)
+                return  // Don't hide panel, let user pick another
+            }
 
-        // Create task immediately as child of selected parent
-        createTaskWithCustomParent(
-            text: taskText,
-            customParentId: parentId,
-            switchToTask: shouldSwitch
-        )
+            // Valid selection - hide panel and proceed
+            outlineParentSelectorPanel.hide()
+
+            reparentExistingTask(
+                taskId: taskId,
+                newText: taskText,
+                newParentId: parentId,
+                newParentText: parentText
+            )
+        } else {
+            // Normal flow - hide panel and create new task
+            outlineParentSelectorPanel.hide()
+
+            // Store parent selection in Spotlight
+            spotlightViewController.setSelectedParent(parentId: parentId, parentText: parentText)
+
+            // Create task immediately as child of selected parent
+            createTaskWithCustomParent(
+                text: taskText,
+                customParentId: parentId,
+                switchToTask: shouldSwitch
+            )
+        }
 
         // Clear parent selection for next task
         spotlightViewController.clearParentSelection()
+    }
+
+    private func reparentExistingTask(taskId: String, newText: String, newParentId: String, newParentText: String) {
+        print("🔄 [Re-parent] Moving task \(taskId) to parent \(newParentId)")
+
+        // Get the new parent's root_id
+        guard let newParent = LocalTaskStore.shared.fetchTaskById(newParentId) else {
+            ToastManager.shared.show("❌ Failed to find parent task", type: .error)
+            return
+        }
+        let newRootId = newParent.root_id ?? newParentId  // If parent is root, use its ID
+
+        // Update task in local storage
+        let success = LocalTaskStore.shared.updateTaskParent(
+            id: taskId,
+            newParentId: newParentId,
+            newRootId: newRootId,
+            newText: newText
+        )
+
+        guard success else {
+            ToastManager.shared.show("❌ Failed to re-parent task", type: .error)
+            return
+        }
+
+        // Update AppState with new parent info
+        AppState.shared.setCurrent(
+            id: taskId,
+            text: newText,
+            parentId: newParentId,
+            rootId: newRootId
+        )
+
+        // Fetch display info for CloudKit pointer
+        var rootTaskText: String? = nil
+        var showEllipsis = false
+        var siblingPosition: Int? = nil
+        var siblingCount: Int? = nil
+
+        // Fetch root task text if root is different from parent
+        if newRootId != newParentId {
+            let rootTask = LocalTaskStore.shared.fetchTaskById(newRootId)
+            rootTaskText = rootTask?.text
+        }
+
+        // Check if parent's parent != root (for ellipsis)
+        if let parentParentId = newParent.parent_id,
+           parentParentId != newRootId {
+            showEllipsis = true
+        }
+
+        // Fetch siblings for position/count
+        let siblings = LocalTaskStore.shared.fetchSiblings(parentId: newParentId)
+        siblingCount = siblings.count
+        siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+
+        // Update CloudKit pointer
+        CloudKitManager.shared.updateCurrentTaskPointer(
+            taskId: taskId,
+            text: newText,
+            parentId: newParentId,
+            rootId: newRootId,
+            parentTaskText: newParentText,
+            rootTaskText: rootTaskText,
+            showEllipsis: showEllipsis,
+            siblingPosition: siblingPosition,
+            siblingCount: siblingCount
+        ) { error in
+            if let error = error {
+                print("⚠️ [Re-parent] CloudKit pointer update failed: \(error.localizedDescription)")
+            }
+        }
+
+        ToastManager.shared.show("✓ Task re-parented", type: .success)
+        print("✅ [Re-parent] Task moved to new parent: \(newParentText)")
     }
 
     private func handleParentSelectorCancelled() {

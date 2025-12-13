@@ -240,6 +240,44 @@ class LocalTaskStore {
         return allTasks.contains { $0.parent_id == taskId }
     }
 
+    /// Update the parent (and optionally text) of an existing task
+    /// Returns true if task was found and updated, false otherwise
+    func updateTaskParent(id: String, newParentId: String, newRootId: String, newText: String? = nil) -> Bool {
+        var tasksFile = loadFromFile()
+
+        // Find task by ID
+        guard let index = tasksFile.tasks.firstIndex(where: { $0.id == id }) else {
+            print("⚠️ [LocalTaskStore] Task not found for re-parent: \(id)")
+            return false
+        }
+
+        let oldTask = tasksFile.tasks[index]
+
+        // Create updated task with new parent
+        let updatedTask = Task(
+            id: oldTask.id,
+            text: newText ?? oldTask.text,
+            timestamp: oldTask.timestamp,
+            parent_id: newParentId,
+            root_id: newRootId,
+            isCompleted: oldTask.isCompleted
+        )
+
+        // Replace in array
+        tasksFile.tasks[index] = updatedTask
+        print("🔄 [LocalTaskStore] Re-parented task: \"\(oldTask.text)\" → parent: \(newParentId)")
+
+        // Save to file
+        do {
+            try saveToFile(tasksFile)
+            print("✅ [LocalTaskStore] File saved after re-parent")
+            return true
+        } catch {
+            print("❌ [LocalTaskStore] Error saving after re-parent: \(error)")
+            return false
+        }
+    }
+
     /// Update the text of an existing task
     /// Returns true if task was found and updated, false otherwise
     func updateTaskText(id: String, newText: String) -> Bool {
