@@ -1,7 +1,7 @@
 # Hold - System Architecture
 
-**Last Updated**: November 2024
-**Version**: v2.1 (Local-First + Leaf View + Parent Selector)
+**Last Updated**: December 2024
+**Version**: v2.2 (SwiftUI Parent Selector redesign)
 
 ---
 
@@ -219,8 +219,10 @@ Leaf Selector shows both "Test hotkeys" AND "Design UI" (any leaf in root)
 
 **Implementation**:
 - `LocalTaskStore.fetchAllTasksInHierarchy(taskId)` - returns all tasks sorted by depth
-- `ParentSelectorViewController` - displays list, handles Enter/Ctrl+Enter
-- `ParentSelectorPanel` - floating panel UI
+- `OutlineParentSelector.swift` - SwiftUI-based tree view with:
+  - `OutlineParentSelectorPanel` - NSPanel wrapper with keyboard event handling
+  - `OutlineParentSelectorView` - SwiftUI List with recursive DisclosureGroup
+  - `ParentItem` - nested tree model built from flat TreeTask array
 - `SpotlightViewController` - tracks `selectedParentId` and `preservedText`
 - `AppDelegate.createTaskWithCustomParent()` - creates child of selected parent
 
@@ -599,8 +601,8 @@ HoldApp/
 │   ├── LeafSelectorViewController.swift     # Leaf task table controller
 │   ├── LeafSelectorPanel.swift              # Floating window for leaf selector
 │   ├── LeafTableView.swift                  # Custom NSTableView (keyboard handling)
-│   ├── ParentSelectorViewController.swift   # Parent selection table controller
-│   ├── ParentSelectorPanel.swift            # Floating window for parent selector
+│   ├── OutlineParentSelector.swift          # SwiftUI parent selector (tree view + panel)
+│   ├── ParentSelectorMockups.swift          # Design mockups for parent selector UI
 │   ├── RootSelectorViewController.swift     # Root table controller
 │   ├── RootSelectorPanel.swift              # Floating window for roots
 │   ├── RootTableView.swift                  # Custom NSTableView (keyboard handling)
