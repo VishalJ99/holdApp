@@ -115,16 +115,20 @@ Root/Sibling Selection:
 
 **Rules**:
 - Can only dismiss leaf tasks (no children)
-- Intelligent fallback navigation:
-  1. Try sibling (same parent)
-  2. Try parent (go up one level)
-  3. Try another root (switch trees)
-  4. Clear current task (no tasks left)
+- Hierarchical navigation (siblings first, then move up):
+  1. Youngest leaf sibling (same parent) - stay at same level
+  2. Parent if now a leaf (bias toward moving up tree)
+  3. Youngest leaf in root (fallback)
+  4. Youngest root's youngest leaf (if root gone)
+  5. Clear current task (no tasks left)
 
 **Implementation** (`AppDelegate.dismissCurrentTask()`):
 - `LocalTaskStore.hasChildren()` blocks dismissal of parents
 - `LocalTaskStore.deleteTask()` hard deletes from tasks.json
-- Falls back through sibling → parent → root → clear
+- `LocalTaskStore.fetchSiblings(parentId)` gets siblings, filtered to leaves only
+- `LocalTaskStore.fetchLeaves(rootId)` finds all leaves in root
+- Checks if parent is in leaves list (parent became leaf after dismissal)
+- Always navigates to a leaf node
 
 ### 4. Edit Mode (Up Arrow)
 
@@ -466,7 +470,11 @@ All panels:
 2. AppDelegate.dismissCurrentTask():
    a. Check LocalTaskStore.hasChildren() → blocks if has children
    b. LocalTaskStore.deleteTask() → removes from tasks.json
-   c. Fallback navigation (sibling → parent → root → clear)
+   c. Navigation priority:
+      - Youngest leaf sibling (same parent)
+      - Parent if now a leaf
+      - Youngest leaf in root
+      - Youngest root's youngest leaf
    d. CloudKitManager.updateCurrentTaskPointer() or clear
 3. CloudKit subscription → iPhone updates to new current task
 ```
