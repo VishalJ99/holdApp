@@ -1,7 +1,7 @@
 # Hold - System Architecture
 
 **Last Updated**: December 2024
-**Version**: v2.2 (SwiftUI Parent Selector redesign)
+**Version**: v2.3 (SwiftUI Root & Leaf Selector redesign)
 
 ---
 
@@ -193,11 +193,13 @@ Root: "Complete hold app"
 ```
 Leaf Selector shows both "Test hotkeys" AND "Design UI" (any leaf in root)
 
-**Implementation** (`AppDelegate.showLeafSelector()`):
-- Gets rootId from current task
-- Calls `fetchLeaves(rootId)` to get all leaves
-- Displays in `LeafSelectorPanel`
-- Highlights current task if it's a leaf
+**Implementation** (`SwiftUILeafSelector.swift`):
+- SwiftUI-based flat list with NSPanel wrapper
+- `SwiftUILeafSelectorPanel` - handles keyboard events (arrows, Enter, Escape)
+- `LeafSelectorView` - SwiftUI List with header "Select Leaf"
+- `LeafRowView` - bullet icon + text + "current" badge
+- Styling: `.ultraThinMaterial` blur, 16pt corners, white 0.2 border
+- Custom selection highlighting (white 0.15 opacity background)
 
 ### 7. Parent Selector (Cmd+P in Spotlight)
 
@@ -241,11 +243,21 @@ Result: New task created as child of root
 
 ### 8. Root Selector (Cmd+Shift+R)
 
-**Root Selector (Cmd+Shift+R)**:
-- Shows table of root tasks (parent_id == nil)
+**Purpose**: Switch to a different root task (top-level project)
+
+**Behavior**:
+- Shows flat list of root tasks (parent_id == nil)
 - Fetches via `LocalTaskStore.fetchRoots()`
 - Arrow keys navigate, Enter selects
-- Updates current task pointer on selection
+- Updates current task pointer to latest task in selected root
+
+**Implementation** (`SwiftUIRootSelector.swift`):
+- SwiftUI-based flat list with NSPanel wrapper
+- `SwiftUIRootSelectorPanel` - handles keyboard events (arrows, Enter, Escape)
+- `RootSelectorView` - SwiftUI List with header "Select Root"
+- `RootRowView` - bullet icon + text + "current" badge
+- Styling: `.ultraThinMaterial` blur, 16pt corners, white 0.2 border
+- Custom selection highlighting (white 0.15 opacity background)
 
 ### 9. Menu Bar Icon
 
@@ -393,14 +405,16 @@ User presses Cmd+Shift+Space
 ```
 
 #### UI Panels
-- **SpotlightPanel** - Floating window for task input
-- **SiblingSelectorPanel** - Floating window for sibling table
-- **RootSelectorPanel** - Floating window for root table
+- **SpotlightPanel** - Floating window for task input (AppKit)
+- **SwiftUILeafSelectorPanel** - Floating window for leaf list (SwiftUI + NSPanel)
+- **SwiftUIRootSelectorPanel** - Floating window for root list (SwiftUI + NSPanel)
+- **OutlineParentSelectorPanel** - Floating window for parent tree (SwiftUI + NSPanel)
 
 All panels:
 - Borderless, floating window level
 - Escape key dismisses
-- Arrow key navigation in tables
+- Arrow key navigation
+- SwiftUI panels use `.ultraThinMaterial` blur, 16pt corners, white border
 
 ---
 
@@ -606,14 +620,10 @@ HoldApp/
 │   ├── SpotlightViewController.swift        # Task input field controller
 │   ├── SpotlightPanel.swift                 # Floating window for Spotlight
 │   ├── SubmitTextField.swift                # Custom NSTextField (modifier + Cmd+P detection)
-│   ├── LeafSelectorViewController.swift     # Leaf task table controller
-│   ├── LeafSelectorPanel.swift              # Floating window for leaf selector
-│   ├── LeafTableView.swift                  # Custom NSTableView (keyboard handling)
+│   ├── SwiftUILeafSelector.swift            # SwiftUI leaf selector (flat list + NSPanel)
+│   ├── SwiftUIRootSelector.swift            # SwiftUI root selector (flat list + NSPanel)
 │   ├── OutlineParentSelector.swift          # SwiftUI parent selector (tree view + panel)
 │   ├── ParentSelectorMockups.swift          # Design mockups for parent selector UI
-│   ├── RootSelectorViewController.swift     # Root table controller
-│   ├── RootSelectorPanel.swift              # Floating window for roots
-│   ├── RootTableView.swift                  # Custom NSTableView (keyboard handling)
 │   ├── TaskInputUI.swift                    # Protocol for task input
 │   ├── AppState.swift                       # Global state (current task)
 │   ├── ToastManager.swift                   # Temporary notifications

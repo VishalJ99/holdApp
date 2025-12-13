@@ -12,10 +12,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private var spotlightPanel: SpotlightPanel!
     private var spotlightViewController: SpotlightViewController!
-    private var leafSelectorPanel: LeafSelectorPanel!
-    private var leafSelectorViewController: LeafSelectorViewController!
-    private var rootSelectorPanel: RootSelectorPanel!
-    private var rootSelectorViewController: RootSelectorViewController!
+    private var leafSelectorPanel: SwiftUILeafSelectorPanel!
+    private var rootSelectorPanel: SwiftUIRootSelectorPanel!
     private var outlineParentSelectorPanel: OutlineParentSelectorPanel!
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
@@ -61,31 +59,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.showParentSelector(taskText: text)
         }
 
-        // Create Leaf Selector UI
-        leafSelectorViewController = LeafSelectorViewController()
-        leafSelectorPanel = LeafSelectorPanel()
-        leafSelectorPanel.contentViewController = leafSelectorViewController
-
-        // Setup leaf selector callbacks
-        leafSelectorViewController.onLeafSelected = { [weak self] taskId, taskText in
+        // Create Leaf Selector UI (SwiftUI-based)
+        leafSelectorPanel = SwiftUILeafSelectorPanel()
+        leafSelectorPanel.onLeafSelected = { [weak self] taskId, taskText in
             self?.handleLeafSelection(taskId: taskId, taskText: taskText)
         }
-
-        leafSelectorViewController.onCancel = { [weak self] in
+        leafSelectorPanel.onCancel = { [weak self] in
             self?.leafSelectorPanel.hide()
         }
 
-        // Create Root Selector UI
-        rootSelectorViewController = RootSelectorViewController()
-        rootSelectorPanel = RootSelectorPanel()
-        rootSelectorPanel.contentViewController = rootSelectorViewController
-
-        // Setup root selector callbacks
-        rootSelectorViewController.onRootSelected = { [weak self] rootId, rootText in
+        // Create Root Selector UI (SwiftUI-based)
+        rootSelectorPanel = SwiftUIRootSelectorPanel()
+        rootSelectorPanel.onRootSelected = { [weak self] rootId, rootText in
             self?.handleRootSelection(rootId: rootId, rootText: rootText)
         }
-
-        rootSelectorViewController.onCancel = { [weak self] in
+        rootSelectorPanel.onCancel = { [weak self] in
             self?.rootSelectorPanel.hide()
         }
 
