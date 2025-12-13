@@ -276,11 +276,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("🌲 [Task Creation] Calculated root_id: \(rootId)")
         print("🧮 [Task Creation] Logic: parent.rootId ?? parent.id = \"\(parent.rootId ?? "nil")\" ?? \"\(parent.id)\" = \"\(rootId)\"")
 
-        // PRE-QUERY: Fetch siblings BEFORE saving (no index lag!)
-        let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parent.id)
-        let siblingCount = siblings.count + 1  // +1 for the task we're about to create
-        let siblingPosition = siblingCount  // New child goes last (sorted by timestamp)
-        print("✅ [Child Creation] Pre-calculated sibling info: position=\(siblingPosition)/\(siblingCount)")
+        // Note: Leaf position will be calculated AFTER saving (DFS order depends on tree structure)
 
         // Fetch parent task text
         let parentTask = LocalTaskStore.shared.fetchTaskById(parent.id)
@@ -312,6 +308,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             isCompleted: false
         )
 
+        // Calculate leaf position after saving (DFS order)
+        let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: rootId)
+        let leafCount = leaves.count
+        let leafPosition = (leaves.firstIndex(where: { $0.id == taskId }) ?? -1) + 1
+        print("✅ [Child Creation] Leaf info (DFS): position=\(leafPosition)/\(leafCount)")
+
         // Child tasks always become current
         AppState.shared.setCurrent(id: taskId, text: text, parentId: parent.id, rootId: rootId)
 
@@ -324,8 +326,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
@@ -388,8 +390,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var parentTaskText: String? = nil
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         // Fetch parent task text if parent exists
         if let parentId = displayParentId {
@@ -413,24 +415,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 rootTaskText = rootTask?.text
                 print("✅ [Sibling Creation] Fetched root text: \(rootTaskText ?? "nil")")
             }
+        }
 
-            // Fetch siblings (now includes the newly created sibling)
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-            siblingCount = siblings.count
-
-            if switchTo {
-                // Display task is the new sibling (goes last by timestamp)
-                siblingPosition = siblingCount
-            } else {
-                // Display task is current task (find its position)
-                if let idx = siblings.firstIndex(where: { $0.id == displayTaskId }) {
-                    siblingPosition = idx + 1  // 1-based index
-                } else {
-                    siblingPosition = 1  // Fallback
-                }
-            }
-
-            print("✅ [Sibling Creation] Sibling info: position=\(siblingPosition ?? 0)/\(siblingCount ?? 0)")
+        // Fetch leaves in DFS order (includes newly created sibling)
+        if let rootId = displayRootId {
+            let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: rootId)
+            leafCount = leaves.count
+            leafPosition = (leaves.firstIndex(where: { $0.id == displayTaskId }) ?? -1) + 1
+            print("✅ [Sibling Creation] Leaf info (DFS): position=\(leafPosition ?? 0)/\(leafCount ?? 0)")
         }
 
         // Update pointer with complete display info
@@ -442,8 +434,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
@@ -528,8 +520,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var parentTaskText: String? = nil
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         if let displayParentId = displayParentId {
             let displayParentTask = LocalTaskStore.shared.fetchTaskById(displayParentId)
@@ -546,11 +538,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let displayRootId = displayRootId, displayRootId != displayParentId {
                 rootTaskText = LocalTaskStore.shared.fetchTaskById(displayRootId)?.text
             }
+        }
 
-            // Fetch sibling position/count
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: displayParentId)
-            siblingCount = siblings.count
-            siblingPosition = siblings.firstIndex(where: { $0.id == displayTaskId }).map { $0 + 1 }
+        // Fetch leaf position/count in DFS order
+        if let displayRootId = displayRootId {
+            let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: displayRootId)
+            leafCount = leaves.count
+            leafPosition = (leaves.firstIndex(where: { $0.id == displayTaskId }) ?? -1) + 1
         }
 
         // Update CloudKit pointer
@@ -562,8 +556,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [Task Creation] Pointer update failed: \(error.localizedDescription)")
@@ -634,8 +628,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var parentTaskText: String? = nil
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         // Fetch parent task text
         if let parentId = parentId {
@@ -659,12 +653,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 rootTaskText = rootTask?.text
                 print("✅ [Leaf Switch] Fetched root text: \(rootTaskText ?? "nil")")
             }
+        }
 
-            // Fetch siblings to get position/count
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-            siblingCount = siblings.count
-            siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
-            print("✅ [Leaf Switch] Sibling info: position=\(siblingPosition ?? 0)/\(siblingCount ?? 0)")
+        // Fetch leaf position/count in DFS order
+        if let rootId = rootId {
+            let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: rootId)
+            leafCount = leaves.count
+            leafPosition = (leaves.firstIndex(where: { $0.id == taskId }) ?? -1) + 1
+            print("✅ [Leaf Switch] Leaf info (DFS): position=\(leafPosition ?? 0)/\(leafCount ?? 0)")
         }
 
         // Update pointer with complete display info
@@ -676,8 +672,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [Leaf Switch] Pointer update failed: \(error.localizedDescription)")
@@ -742,8 +738,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var parentTaskText: String? = nil
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         // Fetch parent task text if it exists
         if let parentId = parentId {
@@ -760,12 +756,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             } else {
                 print("📊 [Root Switch] showEllipsis=false")
             }
-
-            // Fetch siblings (no index lag!)
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-            siblingCount = siblings.count
-            siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
-            print("✅ [Root Switch] Sibling position: \(siblingPosition ?? 0)/\(siblingCount ?? 0)")
         }
 
         // Fetch root task text if it exists and is different from parent
@@ -773,6 +763,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
             rootTaskText = rootTask?.text
             print("✅ [Root Switch] Fetched root text: \(rootTaskText ?? "nil")")
+        }
+
+        // Fetch leaf position/count in DFS order
+        if let rootId = rootIdFromRecord {
+            let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: rootId)
+            leafCount = leaves.count
+            leafPosition = (leaves.firstIndex(where: { $0.id == taskId }) ?? -1) + 1
+            print("✅ [Root Switch] Leaf info (DFS): position=\(leafPosition ?? 0)/\(leafCount ?? 0)")
         }
 
         print("📊 [Root Switch] All fetches complete - updating pointer")
@@ -786,8 +784,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [Root Switch] Pointer update failed: \(error.localizedDescription)")
@@ -907,8 +905,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Fetch display info for CloudKit pointer
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         // Fetch root task text if root is different from parent
         if newRootId != newParentId {
@@ -922,10 +920,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             showEllipsis = true
         }
 
-        // Fetch siblings for position/count
-        let siblings = LocalTaskStore.shared.fetchSiblings(parentId: newParentId)
-        siblingCount = siblings.count
-        siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+        // Fetch leaf position/count in DFS order
+        let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: newRootId)
+        leafCount = leaves.count
+        leafPosition = (leaves.firstIndex(where: { $0.id == taskId }) ?? -1) + 1
+        print("✅ [Re-parent] Leaf info (DFS): position=\(leafPosition ?? 0)/\(leafCount ?? 0)")
 
         // Update CloudKit pointer
         CloudKitManager.shared.updateCurrentTaskPointer(
@@ -936,8 +935,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: newParentText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [Re-parent] CloudKit pointer update failed: \(error.localizedDescription)")
@@ -1079,12 +1078,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Update AppState
         AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
 
-        // Fetch all display info from local storage (same pattern as sibling/root selection)
+        // Fetch all display info from local storage
         var parentTaskText: String? = nil
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         if let parentId = parentId {
             let parentTask = LocalTaskStore.shared.fetchTaskById(parentId)
@@ -1102,11 +1101,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
                 rootTaskText = rootTask?.text
             }
+        }
 
-            // Fetch sibling position/count
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-            siblingCount = siblings.count
-            siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+        // Fetch leaf position/count in DFS order
+        if let rootId = rootId {
+            let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: rootId)
+            leafCount = leaves.count
+            leafPosition = (leaves.firstIndex(where: { $0.id == taskId }) ?? -1) + 1
         }
 
         // Update CloudKit pointer
@@ -1118,8 +1119,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [Navigate] Pointer update failed: \(error.localizedDescription)")
@@ -1182,8 +1183,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var parentTaskText: String? = nil
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         if let parentId = latestInTree.parent_id {
             let parentTask = LocalTaskStore.shared.fetchTaskById(parentId)
@@ -1201,11 +1202,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
                 rootTaskText = rootTask?.text
             }
+        }
 
-            // Fetch sibling position/count
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-            siblingCount = siblings.count
-            siblingPosition = siblings.firstIndex(where: { $0.id == latestInTree.id }).map { $0 + 1 }
+        // Fetch leaf position/count in DFS order
+        if let rootId = latestInTree.root_id {
+            let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: rootId)
+            leafCount = leaves.count
+            leafPosition = (leaves.firstIndex(where: { $0.id == latestInTree.id }) ?? -1) + 1
         }
 
         // Update CloudKit pointer
@@ -1218,8 +1221,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [Startup] Pointer update failed: \(error.localizedDescription)")
@@ -1272,8 +1275,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         var parentTaskText: String? = nil
         var rootTaskText: String? = nil
         var showEllipsis = false
-        var siblingPosition: Int? = nil
-        var siblingCount: Int? = nil
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
 
         if let parentId = parentId {
             let parentTask = LocalTaskStore.shared.fetchTaskById(parentId)
@@ -1291,11 +1294,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
                 rootTaskText = rootTask?.text
             }
+        }
 
-            // Fetch sibling position/count
-            let siblings = LocalTaskStore.shared.fetchSiblings(parentId: parentId)
-            siblingCount = siblings.count
-            siblingPosition = siblings.firstIndex(where: { $0.id == taskId }).map { $0 + 1 }
+        // Fetch leaf position/count in DFS order
+        if let rootId = rootId {
+            let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: rootId)
+            leafCount = leaves.count
+            leafPosition = (leaves.firstIndex(where: { $0.id == taskId }) ?? -1) + 1
         }
 
         // Update pointer with new text + existing metadata
@@ -1307,8 +1312,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             parentTaskText: parentTaskText,
             rootTaskText: rootTaskText,
             showEllipsis: showEllipsis,
-            siblingPosition: siblingPosition,
-            siblingCount: siblingCount
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
         ) { error in
             if let error = error {
                 print("⚠️ [Task Update] Pointer update failed: \(error.localizedDescription)")

@@ -30,7 +30,8 @@ class CloudKitManager {
     // MARK: - CurrentTaskPointer Operations (iPhone Sync)
 
     // Fetch the current task from pointer record (bypasses query index lag)
-    // Returns all display info: task texts, hierarchy info, sibling info
+    // Returns all display info: task texts, hierarchy info, leaf position info
+    // Note: siblingPosition/siblingCount fields store leaf position/count (DFS order)
     func fetchCurrentTask(completion: @escaping (Result<(
         taskId: String?,
         text: String?,
@@ -65,7 +66,7 @@ class CloudKitManager {
                 print("✅ [CloudKit] Current task fetched in \(String(format: "%.2f", fetchTime))s")
                 print("📝 [CloudKit] Fetched from pointer (instant, no index lag)")
                 print("🔗 [Fetch Summary] text=\"\(text ?? "nil")\" | taskId=\(taskId ?? "nil") | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
-                print("📊 [Sibling Info] position=\(siblingPosition?.description ?? "nil")/\(siblingCount?.description ?? "nil") | ellipsis=\(showEllipsis)")
+                print("📊 [Leaf Info] position=\(siblingPosition?.description ?? "nil")/\(siblingCount?.description ?? "nil") | ellipsis=\(showEllipsis)")
                 completion(.success((
                     taskId: taskId,
                     text: text,
@@ -115,7 +116,7 @@ class CloudKitManager {
         let pointerStartTime = Date()
         print("🎯 [CloudKit] Updating current task pointer at \(pointerStartTime)")
         print("🔗 [Pointer Update] taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
-        print("📊 [Sibling Update] position=\(siblingPosition?.description ?? "nil")/\(siblingCount?.description ?? "nil") | ellipsis=\(showEllipsis)")
+        print("📊 [Leaf Update] position=\(siblingPosition?.description ?? "nil")/\(siblingCount?.description ?? "nil") | ellipsis=\(showEllipsis)")
 
         // Use hardcoded record ID so both macOS and iPhone know where to look
         let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")

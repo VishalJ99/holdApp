@@ -87,7 +87,7 @@ struct ContentView: View {
                     print("   Ellipsis: \(showEllipsis ? "YES" : "NO")")
                     print("   Parent: \(parentText ?? "nil")")
                     print("   Current: \(currentText ?? "nil")")
-                    print("📊 [ContentView] Siblings: \(siblingPos?.description ?? "nil")/\(siblingCnt?.description ?? "nil")")
+                    print("📊 [ContentView] Leaves (DFS): \(siblingPos?.description ?? "nil")/\(siblingCnt?.description ?? "nil")")
                 }
 
             case .failure(let error):
@@ -191,7 +191,7 @@ struct HierarchyView_MaxContrast: View {
                         .lineSpacing(2)
                 }
 
-                // SIBLING INDICATOR (only if has siblings)
+                // LEAF INDICATOR (shows position among all leaves in root, DFS order)
                 if let position = siblingPosition,
                    let total = siblingTotal,
                    total > 1 {

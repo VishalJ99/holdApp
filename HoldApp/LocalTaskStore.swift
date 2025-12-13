@@ -331,6 +331,48 @@ class LocalTaskStore {
         return leaves.sorted { $0.timestamp < $1.timestamp }
     }
 
+    /// Fetch all leaf tasks in DFS (depth-first) tree traversal order
+    /// Used for leaf indicator - shows position of current leaf among all leaves in root
+    /// Position follows tree structure: top-left leaves first, bottom-right last
+    func fetchLeavesDFS(rootId: String) -> [Task] {
+        let allTasks = fetchAllTasks()
+        let tasksInRoot = allTasks.filter { $0.root_id == rootId || $0.id == rootId }
+
+        // Find the root task
+        guard let rootTask = tasksInRoot.first(where: { $0.parent_id == nil }) else {
+            // If no root found, check if rootId itself is the only task (root with no children)
+            if let singleRoot = allTasks.first(where: { $0.id == rootId && $0.parent_id == nil }) {
+                // Root itself is a leaf if it has no children
+                if !hasChildren(taskId: singleRoot.id) {
+                    return [singleRoot]
+                }
+            }
+            return []
+        }
+
+        var leaves: [Task] = []
+
+        // DFS traversal collecting only leaves
+        func collectLeaves(current: Task) {
+            let children = tasksInRoot
+                .filter { $0.parent_id == current.id }
+                .sorted { $0.timestamp < $1.timestamp }
+
+            if children.isEmpty {
+                // Current task is a leaf
+                leaves.append(current)
+            } else {
+                // Recurse into children (DFS order)
+                for child in children {
+                    collectLeaves(current: child)
+                }
+            }
+        }
+
+        collectLeaves(current: rootTask)
+        return leaves
+    }
+
     /// Structure to hold task with tree metadata for rendering
     struct TreeTask {
         let task: Task

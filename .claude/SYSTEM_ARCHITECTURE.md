@@ -1,7 +1,7 @@
 # Hold - System Architecture
 
 **Last Updated**: December 2024
-**Version**: v2.3 (SwiftUI Root & Leaf Selector redesign)
+**Version**: v2.4 (Re-parent functionality, Leaf indicator DFS order)
 
 ---
 
@@ -29,7 +29,7 @@ Hold is a local-first task management app with CloudKit synchronization for iPho
 - **LocalTaskStore.swift** - Singleton managing `tasks.json`
   - All task CRUD operations happen locally (instant, no network lag)
   - Synchronous API - no callbacks, no DispatchGroups
-  - Functions: `saveTask()`, `fetchRoots()`, `fetchSiblings()`, `fetchTaskById()`, `fetchLatestInTree()`, `clearAllTasks()`, `deleteTask()`, `hasChildren()`, `updateTaskText()`, `fetchLeaves()`, `fetchAllTasksInHierarchy()`
+  - Functions: `saveTask()`, `fetchRoots()`, `fetchSiblings()`, `fetchTaskById()`, `fetchLatestInTree()`, `clearAllTasks()`, `deleteTask()`, `hasChildren()`, `updateTaskText()`, `fetchLeaves()`, `fetchLeavesDFS()`, `fetchAllTasksInHierarchy()`, `updateTaskParent()`
 
 **❌ Removed from CloudKit**:
 - Task records - NO LONGER SAVED TO CLOUDKIT
@@ -142,10 +142,19 @@ Root/Sibling Selection:
 - Enter → Updates task text via `LocalTaskStore.updateTaskText()`
 - Escape → Hides panel (edit mode reset on next show)
 - Down Arrow → Exits edit mode, hides flap, clears field
+- **Cmd+P → Re-parent mode**: Opens parent selector to change task's parent
+
+**Re-parent Mode (Cmd+P in Edit Mode)**:
+- Triggers `isReparentMode` flag in SpotlightViewController
+- Opens OutlineParentSelector showing entire hierarchy
+- Validates task cannot be its own parent (shows toast, stays in selector)
+- On selection: `AppDelegate.reparentExistingTask()` calls `LocalTaskStore.updateTaskParent()`
+- Saves both text changes and new parent together
 
 **State Management** (`SpotlightViewController.swift`):
 - `isEditMode: Bool` - tracks whether editing
 - `editingTaskId: String?` - ID of task being edited
+- `isReparentMode: Bool` - tracks re-parent flow from edit mode
 - `resetEditMode()` - clears all edit state (called by Down Arrow, focusTextField)
 - `focusTextField()` - always calls `resetEditMode()` on panel show (guards against stale state)
 
@@ -154,6 +163,7 @@ Root/Sibling Selection:
 - Edit mode exit via Enter: `handleTaskUpdate()` calls `resetEditMode()` after save
 - Edit mode exit via Down Arrow: `doCommandBy` handler calls `resetEditMode()` (line ~258)
 - Edit mode exit via Escape: Panel intercepts Escape directly; `focusTextField()` resets on next show
+- Re-parent via Cmd+P: `AppDelegate.reparentExistingTask()` handles parent change and CloudKit sync
 
 ### 5. Nuke Button (Cmd+Shift+Backspace)
 
@@ -308,12 +318,14 @@ User presses Cmd+Shift+Space
 - `saveTask(task)` - Add/update task in JSON
 - `fetchRoots()` - Get all tasks where parent_id == nil
 - `fetchSiblings(taskId)` - Get all tasks with same parent
-- `fetchLeaves(rootId)` - Get all leaf tasks (no children) in a root
+- `fetchLeaves(rootId)` - Get all leaf tasks (no children) in a root (timestamp order)
+- `fetchLeavesDFS(rootId)` - Get all leaf tasks in DFS tree order (used for leaf indicator)
 - `fetchAllTasksInHierarchy(taskId)` - Get all tasks in same root, sorted by depth
 - `fetchTaskById(id)` - Lookup single task
 - `deleteTask(id)` - Remove task from JSON
 - `hasChildren(taskId)` - Check if task has children (blocks dismissal)
 - `updateTaskText(id, newText)` - Edit task description
+- `updateTaskParent(id, newParentId, newRootId)` - Re-parent task to new location
 - `clearAllTasks()` - Empty entire JSON file (nuke)
 
 **Data Structure**:
@@ -543,8 +555,12 @@ All panels:
 | `task_text` | String | Current task description |
 | `parent_id` | String? | Parent task UUID (nil for root) |
 | `root_id` | String | Root task UUID (for hierarchy) |
+| `siblingPosition` | Int? | Position of leaf in DFS order (1-indexed) |
+| `siblingCount` | Int? | Total leaves in root tree |
 | `timestamp` | Date | Last update time |
 | `is_nuke` | Boolean | True if all tasks nuked (transient flag) |
+
+**Note**: `siblingPosition`/`siblingCount` fields are named for backwards compatibility but store **leaf position in DFS order** (not sibling info).
 
 **Record ID**: Always "CURRENT_TASK_POINTER" (single record, not per-task)
 
@@ -587,6 +603,34 @@ All panels:
 **Solution**: Use Control key instead. Control+Enter has no text input meaning, so it properly propagates through the event chain.
 
 **Commits**: `11d03a3` (identified problem), `aae6cf3` (switched to Control)
+
+### Why Leaf Indicator with DFS Order?
+
+**Previous Approach**: Show sibling position (e.g., "2 of 3 siblings under same parent")
+
+**Problem**:
+- Siblings only show tasks with same parent - too narrow
+- Doesn't indicate progress across entire project tree
+- User can't tell how many actionable tasks remain in root
+
+**New Approach**: Show leaf position in DFS order across entire root tree
+
+**Benefits**:
+- Shows position among ALL actionable tasks (leaves) in project
+- DFS order matches visual tree structure (top-left to bottom-right)
+- Gives sense of progress through project tree
+- More meaningful indicator for task management
+
+**Example**:
+```
+Root "Project"
+├─ "Design"
+│   ├─ "Mockup" (leaf) → position 1
+│   └─ "Review" (leaf) → position 2
+└─ "Build"
+    └─ "Code" (leaf) → position 3
+```
+If on "Review", indicator shows: ○ ● ○ (position 2 of 3 leaves)
 
 ### Why Private Database?
 
