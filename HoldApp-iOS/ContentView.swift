@@ -51,6 +51,8 @@ struct ContentView: View {
             setupCloudKitSubscription()
             fetchCurrentTask()
         }
+        .persistentSystemOverlays(.hidden) // Hide home indicator
+        .statusBarHidden(true) // Hide status bar for fully immersive black
     }
 
     func fetchCurrentTask() {
