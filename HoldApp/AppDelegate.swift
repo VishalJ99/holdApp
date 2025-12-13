@@ -16,8 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var leafSelectorViewController: LeafSelectorViewController!
     private var rootSelectorPanel: RootSelectorPanel!
     private var rootSelectorViewController: RootSelectorViewController!
-    private var parentSelectorPanel: ParentSelectorPanel!
-    private var parentSelectorViewController: ParentSelectorViewController!
+    private var outlineParentSelectorPanel: OutlineParentSelectorPanel!
     private var hotkeyManager: HotkeyManager!
     private var logManager: LogManager!
     private var statusItem: NSStatusItem!
@@ -90,17 +89,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             self?.rootSelectorPanel.hide()
         }
 
-        // Create Parent Selector UI
-        parentSelectorViewController = ParentSelectorViewController()
-        parentSelectorPanel = ParentSelectorPanel()
-        parentSelectorPanel.contentViewController = parentSelectorViewController
-
-        // Setup parent selector callbacks
-        parentSelectorViewController.onParentSelected = { [weak self] parentId, parentText, shouldSwitch in
+        // Create Parent Selector UI (OutlineView-based)
+        outlineParentSelectorPanel = OutlineParentSelectorPanel()
+        outlineParentSelectorPanel.onParentSelected = { [weak self] parentId, parentText, shouldSwitch in
             self?.handleParentSelection(parentId: parentId, parentText: parentText, shouldSwitch: shouldSwitch)
         }
-
-        parentSelectorViewController.onCancel = { [weak self] in
+        outlineParentSelectorPanel.onCancel = { [weak self] in
             self?.handleParentSelectorCancelled()
         }
 
@@ -830,23 +824,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Fetch all tasks in hierarchy (sorted by DFS tree order)
-        let (tasksInHierarchy, currentIndex) = LocalTaskStore.shared.fetchAllTasksInHierarchy(taskId: current.id)
-        
+        let (tasksInHierarchy, _) = LocalTaskStore.shared.fetchAllTasksInHierarchy(taskId: current.id)
+
         print("✅ [Parent Selector] Found \(tasksInHierarchy.count) tasks in hierarchy")
-        print("📊 [Parent Selector] Current task at index: \(currentIndex)")
 
         // Hide Spotlight panel
         spotlightPanel.hide()
 
-        // Show parent selector panel
-        parentSelectorPanel.show(parents: tasksInHierarchy, currentIndex: currentIndex)
+        // Show OutlineView parent selector panel
+        outlineParentSelectorPanel.show(
+            treeTasks: tasksInHierarchy,
+            currentTaskId: current.id,
+            currentTaskName: taskText.isEmpty ? current.text : taskText
+        )
     }
 
     private func handleParentSelection(parentId: String, parentText: String, shouldSwitch: Bool) {
         print("🔄 [Parent Selection] Selected parent: \(parentText) (ID: \(parentId), switch: \(shouldSwitch))")
 
         // Hide parent selector
-        parentSelectorPanel.hide()
+        outlineParentSelectorPanel.hide()
 
         // Get preserved text from Spotlight
         guard let taskText = spotlightViewController.preservedText else {
@@ -872,7 +869,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("⎋ [Parent Selector] Cancelled")
 
         // Hide parent selector
-        parentSelectorPanel.hide()
+        outlineParentSelectorPanel.hide()
 
         // Show Spotlight again with preserved text
         spotlightPanel.show()

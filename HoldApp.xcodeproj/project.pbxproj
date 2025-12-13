@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		229F4D832EEDE41800917180 /* OutlineView in Frameworks */ = {isa = PBXBuildFile; productRef = 229F4D822EEDE41800917180 /* OutlineView */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		22A536082EB97CB7000F7BFD /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -118,6 +122,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				229F4D832EEDE41800917180 /* OutlineView in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -252,6 +257,7 @@
 			);
 			name = HoldApp;
 			packageProductDependencies = (
+				229F4D822EEDE41800917180 /* OutlineView */,
 			);
 			productName = HoldApp;
 			productReference = 22ABCE142EB927DE00A43380 /* Hold.app */;
@@ -346,6 +352,9 @@
 			);
 			mainGroup = 22ABCE0B2EB927DE00A43380;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				22BADCA22EE36BDA0017BF67 /* XCRemoteSwiftPackageReference "OutlineView" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 22ABCE152EB927DE00A43380 /* Products */;
 			projectDirPath = "";
@@ -933,6 +942,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		22BADCA22EE36BDA0017BF67 /* XCRemoteSwiftPackageReference "OutlineView" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/Sameesunkaria/OutlineView";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		229F4D822EEDE41800917180 /* OutlineView */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 22BADCA22EE36BDA0017BF67 /* XCRemoteSwiftPackageReference "OutlineView" */;
+			productName = OutlineView;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 22ABCE0C2EB927DE00A43380 /* Project object */;
 }
