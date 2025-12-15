@@ -70,24 +70,20 @@ class SpotlightPanel: NSPanel {
     }
 
     func updateHeight(_ newHeight: CGFloat, animated: Bool) {
-        let newFrame = NSRect(
-            x: frame.origin.x,
-            y: frame.origin.y - (newHeight - frame.height),  // Grow upward
-            width: frame.width,
-            height: newHeight
-        )
+        // Keep current X position, keep top edge fixed (grow downward)
+        let currentTopY = frame.maxY
+        let newY = currentTopY - newHeight
+
+        let newFrame = NSRect(x: frame.origin.x, y: newY, width: frame.width, height: newHeight)
 
         if animated {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.15
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.duration = 0.25
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
                 self.animator().setFrame(newFrame, display: true)
-            } completionHandler: { [weak self] in
-                self?.center()
             }
         } else {
             setFrame(newFrame, display: true)
-            center()
         }
     }
 }
