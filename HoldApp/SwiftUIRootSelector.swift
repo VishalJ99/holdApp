@@ -33,7 +33,7 @@ struct RootSelectorView: View {
 
             // Flat list
             ScrollViewReader { proxy in
-                List(selection: $selection) {
+                List {
                     ForEach(roots) { item in
                         RootRowView(item: item, isSelected: selection?.id == item.id)
                             .tag(item)
