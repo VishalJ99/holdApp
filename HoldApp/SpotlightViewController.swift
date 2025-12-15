@@ -427,11 +427,10 @@ class SpotlightViewController: NSViewController, TaskInputUI {
 
 extension SpotlightViewController: NSTextFieldDelegate {
     func controlTextDidChange(_ notification: Notification) {
-        // Resize immediately - no debounce needed since text field resizes instantly
-        // and only the visual pill animates
+        // Resize instantly - no animation to avoid jarring text/pill mismatch
         let text = textField.stringValue
         let newPillHeight = calculateRequiredHeight(for: text)
-        updatePillHeight(newPillHeight, animated: true)
+        updatePillHeight(newPillHeight, animated: false)
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
