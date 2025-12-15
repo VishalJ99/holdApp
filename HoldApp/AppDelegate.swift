@@ -161,6 +161,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: ","
         ))
 
+        menu.addItem(NSMenuItem(
+            title: "Welcome Guide",
+            action: #selector(showWelcomeGuide),
+            keyEquivalent: ""
+        ))
+
         menu.addItem(NSMenuItem.separator())
 
         menu.addItem(NSMenuItem(
@@ -181,6 +187,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             preferencesWindowController = PreferencesWindowController()
         }
         preferencesWindowController?.showWindow(nil)
+    }
+
+    @objc private func showWelcomeGuide() {
+        showWelcomeWindow()
     }
 
     // MARK: - Task Creation

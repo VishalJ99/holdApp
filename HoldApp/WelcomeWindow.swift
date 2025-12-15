@@ -13,14 +13,18 @@ import SwiftUI
 
 struct OnboardingPage {
     let title: String
-    let subtitle: String?
-    let items: [String]?
+    let content: [ContentLine]
     let isLastPage: Bool
 
-    init(title: String, subtitle: String? = nil, items: [String]? = nil, isLastPage: Bool = false) {
+    enum ContentLine {
+        case text(String)
+        case command(cmd: String, suffix: String? = nil, description: String)  // • cmd (suffix) → description
+        case spacer
+    }
+
+    init(title: String, lines: [ContentLine] = [], isLastPage: Bool = false) {
         self.title = title
-        self.subtitle = subtitle
-        self.items = items
+        self.content = lines
         self.isLastPage = isLastPage
     }
 }
@@ -30,43 +34,88 @@ struct OnboardingPage {
 struct WelcomeView: View {
     @Binding var currentPage: Int
     let onComplete: () -> Void
+    let onHeightChange: (CGFloat) -> Void
+
+    // Two preset heights
+    private let smallHeight: CGFloat = 260
+    private let largeHeight: CGFloat = 420
+
+    private func heightForPage(_ page: Int) -> CGFloat {
+        // Page 2 (index 2) is "Build task trees" - needs more space
+        return page == 2 ? largeHeight : smallHeight
+    }
 
     let pages: [OnboardingPage] = [
+        // Page 1: Philosophy
         OnboardingPage(
             title: "Hold frees your mind.",
-            subtitle: "Capture what you're working on. Your iPhone displays it. Your brain doesn't have to hold it."
+            lines: [
+                .text("Capture what you're working on."),
+                .text("Your iPhone displays it."),
+                .text("Your brain doesn't have to hold it.")
+            ]
         ),
+
+        // Page 2: Capture
         OnboardingPage(
             title: "Capture",
-            subtitle: "Cmd+Shift+Space opens Spotlight\n\nType your task and press Enter."
+            lines: [
+                .command(cmd: "Cmd+Shift+Space", description: "opens Spotlight"),
+                .spacer,
+                .text("Type and press Enter to display your first task.")
+            ]
         ),
+
+        // Page 3: Build task trees
         OnboardingPage(
             title: "Build task trees",
-            items: [
-                "Shift+Enter \u{2192} Child task (auto-switches)",
-                "Cmd+Enter \u{2192} Sibling task",
-                "Ctrl+Enter \u{2192} Task + switch to it"
+            lines: [
+                .command(cmd: "Enter", description: "creates a new independent task (root)"),
+                .spacer,
+                .text("To maintain a relationship:"),
+                .command(cmd: "Shift+Enter", description: "Child of current"),
+                .command(cmd: "Cmd+Enter", description: "Sibling of current"),
+                .spacer,
+                .text("Hold Ctrl to also switch,"),
+                .command(cmd: "Ctrl+Cmd+Enter", description: "Sibling + switch"),
+                .text("(For children, hold Ctrl to avoid switching)"),
+                .spacer,
+                .text("To choose a specific task as parent:"),
+                .command(cmd: "Cmd+P", description: "opens parent selector")
             ]
         ),
+
+        // Page 4: Navigate
         OnboardingPage(
             title: "Navigate",
-            items: [
-                "Cmd+Shift+S \u{2192} Leaf selector",
-                "Cmd+Shift+R \u{2192} Root selector",
-                "Cmd+P in Spotlight \u{2192} Pick parent"
+            lines: [
+                .text("Switch between leaves in your tree,"),
+                .text("or jump to another tree entirely."),
+                .spacer,
+                .command(cmd: "Cmd+Shift+S", description: "Leaf selector"),
+                .command(cmd: "Cmd+Shift+R", description: "Root selector")
             ]
         ),
+
+        // Page 5: Complete tasks
         OnboardingPage(
             title: "Complete tasks",
-            items: [
-                "Cmd+Shift+D \u{2192} Dismiss task",
-                "Cmd+Shift+Backspace (x2) \u{2192} Nuke all"
+            lines: [
+                .command(cmd: "Cmd+Shift+D", description: "Dismiss current task"),
+                .command(cmd: "Cmd+Shift+Backspace", suffix: "(x2)", description: "Nuke all tasks")
             ]
         ),
+
+        // Page 6: Customize
         OnboardingPage(
             title: "Make it yours",
-            subtitle: "Open Preferences from the menu bar to customize hotkeys and modifiers."
+            lines: [
+                .text("Open Preferences from the menu bar"),
+                .text("to customize hotkeys and modifiers.")
+            ]
         ),
+
+        // Page 7: Get Started
         OnboardingPage(
             title: "Your iPhone is waiting.",
             isLastPage: true
@@ -77,7 +126,8 @@ struct WelcomeView: View {
         VStack(spacing: 0) {
             // Content area
             pageContent
-                .frame(height: 180)
+                .padding(.top, 28)
+                .padding(.bottom, 32)
 
             Spacer()
 
@@ -130,45 +180,107 @@ struct WelcomeView: View {
             .padding(.horizontal, 24)
             .padding(.bottom, 20)
         }
-        .frame(width: 420, height: 280)
+        .frame(width: 420, height: heightForPage(currentPage))
+        .onAppear {
+            onHeightChange(heightForPage(currentPage))
+        }
+        .onChange(of: currentPage) { newPage in
+            onHeightChange(heightForPage(newPage))
+        }
+    }
+
+    // Check if page has any commands (vs just text)
+    private func hasCommands(_ page: OnboardingPage) -> Bool {
+        page.content.contains { line in
+            if case .command = line { return true }
+            return false
+        }
     }
 
     @ViewBuilder
     private var pageContent: some View {
         let page = pages[currentPage]
 
-        VStack(spacing: 16) {
-            // Title
-            Text(page.title)
-                .font(.system(size: 24, weight: .light))
-                .foregroundColor(.white)
-                .multilineTextAlignment(.center)
+        // Center content if no commands (text-only or empty pages)
+        if page.content.isEmpty || !hasCommands(page) {
+            VStack(spacing: 6) {
+                Spacer()
 
-            // Subtitle or items
-            if let subtitle = page.subtitle {
-                Text(subtitle)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundColor(.white.opacity(0.7))
-                    .multilineTextAlignment(.center)
-                    .lineSpacing(4)
+                Text(page.title)
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundColor(.white)
+
+                if !page.content.isEmpty {
+                    Spacer().frame(height: 12)
+
+                    ForEach(Array(page.content.enumerated()), id: \.offset) { _, line in
+                        if case .text(let text) = line {
+                            Text(text)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundColor(.white.opacity(0.7))
+                        } else if case .spacer = line {
+                            Spacer().frame(height: 8)
+                        }
+                    }
+                }
+
+                Spacer()
             }
+            .frame(maxWidth: .infinity)
+            .padding(.horizontal, 32)
+        } else {
+            VStack(alignment: .leading, spacing: 6) {
+                // Title
+                Text(page.title)
+                    .font(.system(size: 22, weight: .light))
+                    .foregroundColor(.white)
 
-            if let items = page.items {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(items, id: \.self) { item in
-                        Text(item)
-                            .font(.system(size: 13, weight: .regular, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.8))
+                Spacer().frame(height: 12)
+
+                // Content lines
+                ForEach(Array(page.content.enumerated()), id: \.offset) { _, line in
+                    switch line {
+                    case .text(let text):
+                        Text(text)
+                            .font(.system(size: 13, weight: .regular))
+                            .foregroundColor(.white.opacity(0.7))
+
+                    case .command(let cmd, let suffix, let description):
+                        HStack(alignment: .center, spacing: 6) {
+                            Text(cmd)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(.white.opacity(0.95))
+                                .padding(.vertical, 3)
+                                .padding(.horizontal, 8)
+                                .background(Color.white.opacity(0.12))
+                                .cornerRadius(4)
+
+                            if let suffix = suffix {
+                                Text(suffix)
+                                    .font(.system(size: 13, weight: .regular))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
+
+                            Text("→")
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundColor(.white.opacity(0.5))
+
+                            Text(description)
+                                .font(.system(size: 13, weight: .regular))
+                                .foregroundColor(.white.opacity(0.7))
+                        }
+
+                    case .spacer:
+                        Spacer().frame(height: 8)
                     }
                 }
             }
+            .padding(.horizontal, 32)
         }
-        .padding(.horizontal, 32)
-        .padding(.top, 32)
     }
 
     private func nextPage() {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.easeInOut(duration: 0.25)) {
             if currentPage < pages.count - 1 {
                 currentPage += 1
             }
@@ -176,7 +288,7 @@ struct WelcomeView: View {
     }
 
     private func previousPage() {
-        withAnimation(.easeInOut(duration: 0.2)) {
+        withAnimation(.easeInOut(duration: 0.25)) {
             if currentPage > 0 {
                 currentPage -= 1
             }
@@ -190,10 +302,12 @@ class WelcomePanel: NSPanel {
 
     private var currentPage: Int = 0
     var onComplete: (() -> Void)?
+    private var hostingView: NSHostingView<WelcomeContentWrapper>?
+    private var visualEffectView: NSVisualEffectView?
 
     init() {
         super.init(
-            contentRect: NSRect(x: 0, y: 0, width: 420, height: 280),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 200),
             styleMask: [.nonactivatingPanel, .borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -214,35 +328,50 @@ class WelcomePanel: NSPanel {
 
     private func setupContent() {
         // Create container view
-        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 280))
+        let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 200))
         containerView.wantsLayer = true
+        containerView.autoresizingMask = [.width, .height]
 
         // Frosted glass effect (matches Spotlight)
-        let visualEffectView = NSVisualEffectView(frame: containerView.bounds)
-        visualEffectView.material = .popover
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-        visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 30
-        visualEffectView.layer?.masksToBounds = true
+        let visualEffect = NSVisualEffectView(frame: containerView.bounds)
+        visualEffect.material = .popover
+        visualEffect.blendingMode = .behindWindow
+        visualEffect.state = .active
+        visualEffect.wantsLayer = true
+        visualEffect.layer?.cornerRadius = 30
+        visualEffect.layer?.masksToBounds = true
+        visualEffect.layer?.borderWidth = 1.0
+        visualEffect.layer?.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        visualEffect.autoresizingMask = [.width, .height]
+        self.visualEffectView = visualEffect
 
-        // Border (matches Spotlight)
-        let borderLayer = CALayer()
-        borderLayer.frame = visualEffectView.bounds
-        borderLayer.cornerRadius = 30
-        borderLayer.borderWidth = 1.0
-        borderLayer.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
-        visualEffectView.layer?.addSublayer(borderLayer)
-
-        containerView.addSubview(visualEffectView)
+        containerView.addSubview(visualEffect)
 
         // SwiftUI content
-        let hostingView = NSHostingView(rootView: WelcomeContentWrapper(panel: self))
-        hostingView.frame = containerView.bounds
-        hostingView.autoresizingMask = [.width, .height]
-        visualEffectView.addSubview(hostingView)
+        let hosting = NSHostingView(rootView: WelcomeContentWrapper(panel: self))
+        hosting.frame = containerView.bounds
+        hosting.autoresizingMask = [.width, .height]
+        visualEffect.addSubview(hosting)
+        self.hostingView = hosting
 
         self.contentView = containerView
+    }
+
+    func updateHeight(_ newHeight: CGFloat) {
+        guard newHeight > 0 else { return }
+
+        let currentFrame = self.frame
+        let heightDiff = newHeight - currentFrame.height
+
+        // Keep window centered vertically as it resizes
+        let newY = currentFrame.origin.y - heightDiff / 2
+        let newFrame = NSRect(x: currentFrame.origin.x, y: newY, width: currentFrame.width, height: newHeight)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.25
+            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            self.animator().setFrame(newFrame, display: true)
+        }
     }
 
     override var canBecomeKey: Bool { true }
@@ -281,9 +410,11 @@ struct WelcomeContentWrapper: View {
     @State private var currentPage: Int = 0
 
     var body: some View {
-        WelcomeView(currentPage: $currentPage) {
+        WelcomeView(currentPage: $currentPage, onComplete: {
             panel.complete()
-        }
+        }, onHeightChange: { height in
+            panel.updateHeight(height)
+        })
         .onAppear {
             // Enable arrow key navigation
             NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
