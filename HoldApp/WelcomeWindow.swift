@@ -78,7 +78,6 @@ struct WelcomeView: View {
                 .spacer,
                 .text("Hold Ctrl to also switch,"),
                 .command(cmd: "Ctrl+Cmd+Enter", description: "Sibling + switch"),
-                .text("(For children, hold Ctrl to avoid switching)"),
                 .spacer,
                 .text("To choose a specific task as parent:"),
                 .command(cmd: "Cmd+P", description: "opens parent selector")
