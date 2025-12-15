@@ -405,6 +405,7 @@ User presses Cmd+Shift+Space
 - Modifier detection via `performKeyEquivalent()`
 - Edit mode support
 - Config-driven modifier→action mapping
+- Dynamic pill resizing with reveal animation
 
 **Modifier Detection**:
 ```swift
@@ -415,6 +416,43 @@ User presses Cmd+Shift+Space
 5. Checks which configured modifiers are pressed
 6. Maps to TaskCreationType enum
 ```
+
+**Dynamic Pill Resizing** (WIP - partially implemented):
+
+*Goal*: Smooth "reveal" animation when text wraps to new lines - pill expands to reveal new content without text jumping.
+
+*The Problem ("Typewriter Effect")*:
+When user types text that wraps to a new line:
+1. NSTextField internally reflows text IMMEDIATELY (before delegate methods fire)
+2. Text jumps up to make room for new line
+3. Our code then resizes the pill
+4. Text appears to "settle back" as pill expands
+
+*Intended Solution*:
+1. **Fixed textField height**: Give textField a large fixed height (`maxPillHeight`) so NSTextField never needs to reflow for height
+2. **textField as child of pill**: Add textField to `visualEffectView` (the pill) so `masksToBounds=true` clips overflow
+3. **Top-anchored text**: Position textField so text TOP aligns with pill TOP (Cocoa coords: `textFieldY = pillHeight - topPadding - textFieldHeight`)
+4. **Animate only the pill**: When text grows, only animate `visualEffectView.frame` - text below pill is clipped, revealed as pill expands
+
+*Key Code Locations*:
+- `loadView()` line ~138-194: View hierarchy setup (textField inside visualEffectView)
+- `updatePillHeight()` line ~251-294: Pill animation and positioning
+- `controlTextDidChange()` line ~397: Triggers resize on text change
+- `calculateRequiredHeight()` line ~225: Calculates needed pill height
+
+*Panel Reset Flow* (where each show starts fresh):
+```
+SpotlightPanel.show() (line 57-66)
+  → center() - reposition window
+  → orderFrontRegardless() - bring to front
+  → makeKey() - make key window
+  → SpotlightViewController.focusTextField() (line 296-302)
+      → resetEditMode() - clear edit state
+      → updatePillHeight(minPillHeight, animated: false) - RESET pill to minimum
+      → makeFirstResponder(textField)
+```
+
+*Known Issue*: Panel may not fully reset between shows if `visualEffectView.frame` or text field positions aren't being properly reset in `focusTextField()`.
 
 #### UI Panels
 - **SpotlightPanel** - Floating window for task input (AppKit)
