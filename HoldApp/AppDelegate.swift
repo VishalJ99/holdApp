@@ -19,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var logManager: LogManager!
     private var statusItem: NSStatusItem!
     private var preferencesWindowController: PreferencesWindowController?
+    private var welcomePanel: WelcomePanel?
 
     // Nuke confirmation state
     private var nukeConfirmationPending: Bool = false
@@ -118,6 +119,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Initialize app state by syncing local storage with CloudKit
         initializeAppState()
+
+        // Show onboarding on first launch
+        showOnboardingIfNeeded()
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
@@ -1366,6 +1370,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
             ToastManager.shared.show("Press again to confirm nuke", level: .warning)
         }
+    }
+
+    // MARK: - Onboarding
+
+    private func showOnboardingIfNeeded() {
+        let hasSeenOnboarding = UserDefaults.standard.bool(forKey: "hasSeenOnboarding")
+
+        if !hasSeenOnboarding {
+            print("🎉 [Onboarding] First launch - showing welcome window")
+            showWelcomeWindow()
+        }
+    }
+
+    private func showWelcomeWindow() {
+        welcomePanel = WelcomePanel()
+        welcomePanel?.onComplete = { [weak self] in
+            UserDefaults.standard.set(true, forKey: "hasSeenOnboarding")
+            print("✅ [Onboarding] Completed - won't show again")
+            self?.welcomePanel = nil
+        }
+        welcomePanel?.show()
     }
 }
 

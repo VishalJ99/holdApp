@@ -1,7 +1,7 @@
 # Hold - System Architecture
 
 **Last Updated**: December 2024
-**Version**: v2.5 (Toast notification redesign - frosted glass aesthetic)
+**Version**: v2.6 (Welcome window onboarding)
 
 ---
 
@@ -460,6 +460,24 @@ ToastManager.shared.show("Error message", level: .error)
 - VoiceOver announces level prefix + message
 - Reduce Motion disables scale animation
 
+#### WelcomeWindow.swift
+**Purpose**: First-launch onboarding walkthrough
+
+**Visual Style**: Matches Spotlight pill (frosted glass, 30px corners, white border)
+
+**Pages** (7 total):
+1. Philosophy - "Hold frees your mind"
+2. Capture - Cmd+Shift+Space to open Spotlight
+3. Hierarchy - Modifier keys for child/sibling/switch
+4. Navigate - Leaf/Root selectors, Cmd+P
+5. Complete - Dismiss and Nuke shortcuts
+6. Customize - Preferences for hotkeys
+7. Get Started - Final page with button
+
+**First-Launch Detection**: `UserDefaults.standard.bool(forKey: "hasSeenOnboarding")`
+
+**Navigation**: Arrow keys, chevron buttons, pagination dots
+
 ---
 
 ### iOS App Components
@@ -699,6 +717,7 @@ HoldApp/
 │   ├── SwiftUILeafSelector.swift            # SwiftUI leaf selector (flat list + NSPanel)
 │   ├── SwiftUIRootSelector.swift            # SwiftUI root selector (flat list + NSPanel)
 │   ├── OutlineParentSelector.swift          # SwiftUI parent selector (tree view + panel)
+│   ├── WelcomeWindow.swift                  # First-launch onboarding (pill-style walkthrough)
 │   ├── ParentSelectorMockups.swift          # Design mockups for parent selector UI
 │   ├── TaskInputUI.swift                    # Protocol for task input
 │   ├── AppState.swift                       # Global state (current task)
