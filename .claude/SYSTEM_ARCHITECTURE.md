@@ -1,7 +1,7 @@
 # Hold - System Architecture
 
 **Last Updated**: December 2024
-**Version**: v2.4 (Re-parent functionality, Leaf indicator DFS order)
+**Version**: v2.5 (Toast notification redesign - frosted glass aesthetic)
 
 ---
 
@@ -428,6 +428,38 @@ All panels:
 - Arrow key navigation
 - SwiftUI panels use `.ultraThinMaterial` blur, 16pt corners, white border
 
+#### ToastManager.swift
+**Purpose**: Display temporary notifications with frosted glass aesthetic
+
+**Design Philosophy**: "Toasts should whisper, not shout" - informative without demanding attention
+
+**Toast Levels** (`ToastLevel` enum):
+| Level | SF Symbol | Duration | Background |
+|-------|-----------|----------|------------|
+| success | `checkmark.circle.fill` | 3s | Pure frosted glass |
+| info | `info.circle.fill` | 3s | Pure frosted glass |
+| warning | `exclamationmark.triangle.fill` | 4s | Pure frosted glass |
+| error | `xmark.circle.fill` | 4s | Frosted glass + red 8% tint |
+
+**Visual Design**:
+- Material: `.popover` (frosted glass effect)
+- Border: 1pt stroke, white 0.2 alpha
+- Corner radius: 12px
+- Position: Top center, 80px from top
+- Animation: Fade + scale (0.95→1.0), respects Reduce Motion
+
+**API**:
+```swift
+ToastManager.shared.show("Message", level: .success)
+ToastManager.shared.show("Error message", level: .error)
+```
+
+**Dismiss Message Format**: "Dismissed: {task name}" (truncated to ~40 chars)
+
+**Accessibility**:
+- VoiceOver announces level prefix + message
+- Reduce Motion disables scale animation
+
 ---
 
 ### iOS App Components
@@ -670,7 +702,7 @@ HoldApp/
 │   ├── ParentSelectorMockups.swift          # Design mockups for parent selector UI
 │   ├── TaskInputUI.swift                    # Protocol for task input
 │   ├── AppState.swift                       # Global state (current task)
-│   ├── ToastManager.swift                   # Temporary notifications
+│   ├── ToastManager.swift                   # Toast notifications (frosted glass, SF Symbols)
 │   ├── LogManager.swift                     # Logs to Application Support
 │   ├── Assets.xcassets/
 │   │   ├── AppIcon.appiconset/              # Mac app icon

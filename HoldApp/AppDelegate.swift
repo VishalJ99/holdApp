@@ -191,21 +191,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         case .child:
             guard let current = AppState.shared.currentTask else {
-                ToastManager.shared.show("⚠️ No parent task. Create a top-level task first.", type: .error)
+                ToastManager.shared.show("No parent task. Create a top-level task first.", level: .error)
                 return
             }
             createChildTask(text: text, parent: current)
 
         case .sibling:
             guard let current = AppState.shared.currentTask else {
-                ToastManager.shared.show("⚠️ No reference task. Create a task first.", type: .error)
+                ToastManager.shared.show("No reference task. Create a task first.", level: .error)
                 return
             }
             createSiblingTask(text: text, reference: current, switchTo: false)
 
         case .siblingAndSwitch:
             guard let current = AppState.shared.currentTask else {
-                ToastManager.shared.show("⚠️ No reference task. Create a task first.", type: .error)
+                ToastManager.shared.show("No reference task. Create a task first.", level: .error)
                 return
             }
             createSiblingTask(text: text, reference: current, switchTo: true)
@@ -258,9 +258,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            ToastManager.shared.show("✓ Task created (current)", type: .success)
+            ToastManager.shared.show("Task created (current)", level: .success)
         } else {
-            ToastManager.shared.show("✓ Task created", type: .success)
+            ToastManager.shared.show("Task created", level: .success)
         }
 
         // Log to file for backup
@@ -334,7 +334,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        ToastManager.shared.show("✓ Child created under \(parent.text) (current)", type: .success)
+        ToastManager.shared.show("Child created under \(parent.text) (current)", level: .success)
 
         // Log to file for backup
         logManager.log(text: text, id: taskId, parentId: parent.id, rootId: rootId)
@@ -377,7 +377,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else {
             // Keep current task, but refresh pointer with updated sibling count
             guard let current = AppState.shared.currentTask else {
-                ToastManager.shared.show("✓ Sibling created", type: .success)
+                ToastManager.shared.show("Sibling created", level: .success)
                 return
             }
             displayTaskId = current.id
@@ -442,8 +442,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let message = switchTo ? "✓ Sibling created (current)" : "✓ Sibling created"
-        ToastManager.shared.show(message, type: .success)
+        let message = switchTo ? "Sibling created (current)" : "Sibling created"
+        ToastManager.shared.show(message, level: .success)
 
         // Log to file for backup
         logManager.log(text: text, id: taskId, parentId: reference.parentId, rootId: rootId)
@@ -461,7 +461,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Fetch parent to get root_id
         guard let parentTask = LocalTaskStore.shared.fetchTaskById(customParentId) else {
-            ToastManager.shared.show("❌ Parent task not found", type: .error)
+            ToastManager.shared.show("Parent task not found", level: .error)
             print("❌ [Task Creation] Parent task not found: \(customParentId)")
             return
         }
@@ -564,8 +564,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        let message = switchToTask ? "✓ Task created (current)" : "✓ Task created"
-        ToastManager.shared.show(message, type: .success)
+        let message = switchToTask ? "Task created (current)" : "Task created"
+        ToastManager.shared.show(message, level: .success)
 
         // Log to file
         logManager.log(text: text, id: taskId, parentId: parent_id, rootId: root_id)
@@ -578,7 +578,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Check if current task exists
         guard let current = AppState.shared.currentTask else {
-            ToastManager.shared.show("⚠️ No current task. Switch to a task first.", type: .error)
+            ToastManager.shared.show("No current task. Switch to a task first.", level: .error)
             print("⚠️ [Leaf Selector] No current task in AppState")
             return
         }
@@ -610,7 +610,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Fetch the full task record from local storage
         guard let task = LocalTaskStore.shared.fetchTaskById(taskId) else {
-            ToastManager.shared.show("❌ Failed to load task", type: .error)
+            ToastManager.shared.show("Failed to load task", level: .error)
             print("❌ [Leaf Switch] Task not found")
             return
         }
@@ -681,7 +681,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Show success toast
-        ToastManager.shared.show("✓ Switched to leaf task", type: .success)
+        ToastManager.shared.show("Switched to: \(text)", level: .success)
     }
 
     // MARK: - Root Selector
@@ -693,7 +693,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let roots = LocalTaskStore.shared.fetchRoots()
 
         if roots.isEmpty {
-            ToastManager.shared.show("⚠️ No root tasks found", type: .error)
+            ToastManager.shared.show("No root tasks found", level: .error)
             print("⚠️ [Root Selector] No root tasks in database")
             return
         }
@@ -718,7 +718,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Fetch the latest task in this tree from local storage
         guard let latestTask = LocalTaskStore.shared.fetchLatestInTree(rootId: rootId) else {
-            ToastManager.shared.show("❌ Failed to load latest task", type: .error)
+            ToastManager.shared.show("Failed to load latest task", level: .error)
             print("❌ [Root Switch] No tasks found in tree")
             return
         }
@@ -793,7 +793,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Show success toast
-        ToastManager.shared.show("✓ Switched to \(rootText) tree", type: .success)
+        ToastManager.shared.show("Switched to \(rootText) tree", level: .success)
     }
 
     // MARK: - Parent Selection
@@ -804,7 +804,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Check if current task exists
         guard let current = AppState.shared.currentTask else {
-            ToastManager.shared.show("⚠️ No current task. Create a task first.", type: .error)
+            ToastManager.shared.show("No current task. Create a task first.", level: .error)
             print("⚠️ [Parent Selector] No current task in AppState")
             return
         }
@@ -839,7 +839,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         if spotlightViewController.isReparentMode, let taskId = spotlightViewController.reparentTaskId {
             // Prevent task from being its own parent - stay in selector
             if taskId == parentId {
-                ToastManager.shared.show("⚠️ Task cannot be its own parent", type: .error)
+                ToastManager.shared.show("Task cannot be its own parent", level: .warning)
                 return  // Don't hide panel, let user pick another
             }
 
@@ -876,7 +876,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Get the new parent's root_id
         guard let newParent = LocalTaskStore.shared.fetchTaskById(newParentId) else {
-            ToastManager.shared.show("❌ Failed to find parent task", type: .error)
+            ToastManager.shared.show("Failed to find parent task", level: .error)
             return
         }
         let newRootId = newParent.root_id ?? newParentId  // If parent is root, use its ID
@@ -890,7 +890,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
 
         guard success else {
-            ToastManager.shared.show("❌ Failed to re-parent task", type: .error)
+            ToastManager.shared.show("Failed to re-parent task", level: .error)
             return
         }
 
@@ -943,7 +943,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        ToastManager.shared.show("✓ Task re-parented", type: .success)
+        ToastManager.shared.show("Task re-parented", level: .success)
         print("✅ [Re-parent] Task moved to new parent: \(newParentText)")
     }
 
@@ -965,21 +965,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Validate: Current task exists
         guard let current = AppState.shared.currentTask else {
-            ToastManager.shared.show("⚠️ No current task to dismiss", type: .error)
+            ToastManager.shared.show("No current task to dismiss", level: .error)
             print("⚠️ [Dismiss] No current task in AppState")
             return
         }
 
         // Validate: Task has no children (leaf node check)
         if LocalTaskStore.shared.hasChildren(taskId: current.id) {
-            ToastManager.shared.show("⚠️ Cannot dismiss task with children", type: .error)
+            ToastManager.shared.show("Cannot dismiss task with children", level: .warning)
             print("⚠️ [Dismiss] Task \(current.id) has children - operation blocked")
             return
         }
 
         // Fetch full task record BEFORE deletion (need timestamp for fallback)
         guard let taskRecord = LocalTaskStore.shared.fetchTaskById(current.id) else {
-            ToastManager.shared.show("❌ Task not found", type: .error)
+            ToastManager.shared.show("Task not found", level: .error)
             print("❌ [Dismiss] Task record not found")
             return
         }
@@ -994,7 +994,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Delete task from local storage
         guard LocalTaskStore.shared.deleteTask(id: current.id) else {
-            ToastManager.shared.show("❌ Failed to delete task", type: .error)
+            ToastManager.shared.show("Failed to delete task", level: .error)
             return
         }
 
@@ -1010,7 +1010,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let youngestLeafSibling = leafSiblings.last {  // sorted ASC, .last is youngest
                 print("✅ [Dismiss] Found youngest leaf sibling: \(youngestLeafSibling.text)")
                 navigateToTask(task: youngestLeafSibling, reason: "youngest leaf sibling")
-                ToastManager.shared.show("Task cleared", type: .success)
+                ToastManager.shared.show("Dismissed: \(taskText)", level: .success)
                 return
             }
         }
@@ -1024,7 +1024,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                let parentLeaf = leaves.first(where: { $0.id == parentId }) {
                 print("✅ [Dismiss] Parent is now a leaf: \(parentLeaf.text)")
                 navigateToTask(task: parentLeaf, reason: "parent (now a leaf)")
-                ToastManager.shared.show("Task cleared", type: .success)
+                ToastManager.shared.show("Dismissed: \(taskText)", level: .success)
                 return
             }
 
@@ -1032,7 +1032,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let youngestLeaf = leaves.last {
                 print("✅ [Dismiss] Found youngest leaf in root: \(youngestLeaf.text)")
                 navigateToTask(task: youngestLeaf, reason: "youngest leaf in root")
-                ToastManager.shared.show("Task cleared", type: .success)
+                ToastManager.shared.show("Dismissed: \(taskText)", level: .success)
                 return
             }
         }
@@ -1044,7 +1044,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if let youngestLeaf = leaves.last {
                 print("✅ [Dismiss] Found youngest leaf in youngest root: \(youngestLeaf.text)")
                 navigateToTask(task: youngestLeaf, reason: "youngest leaf in youngest root")
-                ToastManager.shared.show("Task cleared", type: .success)
+                ToastManager.shared.show("Dismissed: \(taskText)", level: .success)
                 return
             }
         }
@@ -1062,7 +1062,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        ToastManager.shared.show("Task cleared (no tasks remaining)", type: .success)
+        ToastManager.shared.show("Dismissed: \(taskText) (no tasks remaining)", level: .success)
     }
 
     /// Navigate to a task and update CloudKit pointer
@@ -1240,7 +1240,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Update in local storage
         guard LocalTaskStore.shared.updateTaskText(id: taskId, newText: newText) else {
-            ToastManager.shared.show("❌ Failed to update task", type: .error)
+            ToastManager.shared.show("Failed to update task", level: .error)
             return
         }
 
@@ -1259,7 +1259,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         spotlightViewController.resetEditMode()
         spotlightPanel.hide()
-        ToastManager.shared.show("✓ Task updated", type: .success)
+        ToastManager.shared.show("Task updated", level: .success)
     }
 
     private func updateCurrentTaskPointerAfterEdit(taskId: String, newText: String) {
@@ -1351,7 +1351,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
 
-            ToastManager.shared.show("💣 All tasks nuked - fresh state", type: .success)
+            ToastManager.shared.show("All tasks nuked - fresh state", level: .success)
         } else {
             // First press - request confirmation
             print("⚠️ [Nuke] First press - requesting confirmation")
@@ -1364,7 +1364,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 self?.nukeConfirmationTimer = nil
             }
 
-            ToastManager.shared.show("⚠️ Press Cmd+Shift+Backspace again to confirm nuke", type: .error)
+            ToastManager.shared.show("Press again to confirm nuke", level: .warning)
         }
     }
 }

@@ -258,7 +258,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             if !modifiers.isEmpty {
                 // User pressed modifier keys in edit mode - show warning
                 print("⚠️ [Edit Mode] Modifiers disabled in edit mode")
-                ToastManager.shared.show("⚠️ Modifiers disabled in edit mode", type: .error)
+                ToastManager.shared.show("Modifiers disabled in edit mode", level: .warning)
                 return
             }
 
