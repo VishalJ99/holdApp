@@ -5,6 +5,20 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     private var textField: SubmitTextField!
     private var flapView: NSVisualEffectView!
     private var pencilIconView: NSImageView!
+    private var visualEffectView: NSVisualEffectView!
+
+    // MARK: - Dynamic Sizing Constants
+    private let pillHorizontalPadding: CGFloat = 40  // 20pt each side
+    private let pillVerticalPadding: CGFloat = 24    // 12pt top/bottom
+    private let minPillHeight: CGFloat = 60
+    private let flapSpace: CGFloat = 30
+    private let animationDuration: TimeInterval = 0.15
+    private var currentPillHeight: CGFloat = 60
+
+    private var maxPillHeight: CGFloat {
+        guard let screen = NSScreen.main else { return 400 }
+        return screen.visibleFrame.height * 0.5 - flapSpace
+    }
 
     // MARK: - Edit Mode State
 
@@ -121,7 +135,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
 
         // 3. Create the Main Pill (Visual Effect View)
         // Moved up by 30 to make room for flap
-        let visualEffectView = NSVisualEffectView(frame: NSRect(x: 0, y: 30, width: 600, height: 60))
+        visualEffectView = NSVisualEffectView(frame: NSRect(x: 0, y: flapSpace, width: 600, height: minPillHeight))
         visualEffectView.autoresizingMask = [.width] // Resize with container width
         visualEffectView.material = .popover
         visualEffectView.state = .active
@@ -138,16 +152,9 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         containerView.addSubview(visualEffectView)
 
         // 3.5 Create Pencil Icon (Inside Pill, LHS)
-        // Positioned at x=20, centered vertically in the pill (y=30 to y=90 -> height 60)
-        // Pill Y starts at 30. Center is 30 + 30 = 60.
-        // 3.5 Create Pencil Icon (Inside Pill, LHS)
-        // Positioned at x=20, centered vertically in the pill (y=30 to y=90 -> height 60)
-        // Pill Y starts at 30. Center is 30 + 30 = 60.
-        // 3.5 Create Pencil Icon (Inside Pill, LHS)
-        // Positioned at x=20, centered vertically in the pill (y=30 to y=90 -> height 60)
-        // Pill Y starts at 30. Center is 30 + 30 = 60.
-        // Icon size 24 (25% larger). Y = 60 - 12 = 48.
-        pencilIconView = NSImageView(frame: NSRect(x: 20, y: 48, width: 24, height: 24))
+        // Positioned at x=20, centered vertically in the pill
+        let pencilIconY = flapSpace + (minPillHeight - 24) / 2
+        pencilIconView = NSImageView(frame: NSRect(x: 20, y: pencilIconY, width: 24, height: 24))
         
         // Use SymbolConfiguration to make the glyph fill the frame better (less internal padding)
         // Increased point size to 22 (approx 25% larger than 18)
@@ -159,8 +166,10 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         containerView.addSubview(pencilIconView)
 
         // 4. Create custom text field
-        // Adjusted Y position to 42 (12 + 30)
-        textField = SubmitTextField(frame: NSRect(x: 20, y: 42, width: 560, height: 36))
+        // Position centered vertically in the pill
+        let initialTextFieldHeight = minPillHeight - pillVerticalPadding
+        let initialTextFieldY = flapSpace + (minPillHeight - initialTextFieldHeight) / 2
+        textField = SubmitTextField(frame: NSRect(x: 20, y: initialTextFieldY, width: 560, height: initialTextFieldHeight))
         textField.placeholderString = "Hold..."
         textField.font = NSFont.systemFont(ofSize: 24, weight: .light)
         textField.textColor = .white
@@ -209,10 +218,75 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         onParentSelectorRequested?(currentText)
     }
 
+    // MARK: - Dynamic Height Calculation
+
+    private func calculateRequiredHeight(for text: String) -> CGFloat {
+        guard !text.isEmpty else { return minPillHeight }
+
+        let textFieldWidth = textField.frame.width
+        let font = textField.font ?? NSFont.systemFont(ofSize: 24)
+
+        let constraintSize = NSSize(width: textFieldWidth, height: .greatestFiniteMagnitude)
+        let attributes: [NSAttributedString.Key: Any] = [.font: font]
+
+        let boundingRect = (text as NSString).boundingRect(
+            with: constraintSize,
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            attributes: attributes
+        )
+
+        let textHeight = ceil(boundingRect.height)
+        let pillHeight = textHeight + pillVerticalPadding
+
+        return min(max(pillHeight, minPillHeight), maxPillHeight)
+    }
+
+    private func updatePillHeight(_ newHeight: CGFloat, animated: Bool) {
+        guard newHeight != currentPillHeight else { return }
+        currentPillHeight = newHeight
+
+        let newContainerHeight = newHeight + flapSpace
+        let textFieldHeight = newHeight - pillVerticalPadding
+
+        // Calculate new positions
+        let pillFrame = NSRect(x: 0, y: flapSpace, width: 600, height: newHeight)
+        let textFieldX: CGFloat = pencilIconView.isHidden ? 20 : 54
+        let textFieldWidth: CGFloat = pencilIconView.isHidden ? 560 : 526
+        let textFieldY = flapSpace + (newHeight - textFieldHeight) / 2
+        let textFieldFrame = NSRect(x: textFieldX, y: textFieldY, width: textFieldWidth, height: textFieldHeight)
+
+        // Update pencil icon Y position (centered in pill)
+        let pencilY = flapSpace + (newHeight - 24) / 2
+
+        // Notify panel to resize
+        if let panel = view.window as? SpotlightPanel {
+            panel.updateHeight(newContainerHeight, animated: animated)
+        }
+
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = animationDuration
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+
+                view.animator().frame.size.height = newContainerHeight
+                visualEffectView.animator().frame = pillFrame
+                textField.animator().frame = textFieldFrame
+                pencilIconView.animator().frame.origin.y = pencilY
+            }
+        } else {
+            view.frame.size.height = newContainerHeight
+            visualEffectView.frame = pillFrame
+            textField.frame = textFieldFrame
+            pencilIconView.frame.origin.y = pencilY
+        }
+    }
+
     func focusTextField() {
         // Always reset edit mode on show - guards against stale state from
         // Escape (which bypasses onCancel) or other unexpected exit paths
         resetEditMode()
+        // Reset pill to minimum height when showing
+        updatePillHeight(minPillHeight, animated: false)
         view.window?.makeFirstResponder(textField)
     }
 
@@ -300,13 +374,20 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             creationType = .topLevel
         }
 
-        // Clear text field and submit
+        // Clear text field, reset height, and submit
         textField.stringValue = ""
+        updatePillHeight(minPillHeight, animated: false)
         onTaskSubmit?(text, creationType)
     }
 }
 
 extension SpotlightViewController: NSTextFieldDelegate {
+    func controlTextDidChange(_ notification: Notification) {
+        let text = textField.stringValue
+        let newPillHeight = calculateRequiredHeight(for: text)
+        updatePillHeight(newPillHeight, animated: true)
+    }
+
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
         // Note: Enter key submissions (including modifier combinations) are handled
         // by SubmitTextField.onSubmit callback, not here.
@@ -334,6 +415,9 @@ extension SpotlightViewController: NSTextFieldDelegate {
             editingTaskId = current.id
             print("✏️ [Edit Mode] Enabled - editing task: \(current.id)")
             updateEditModeUI(isEditing: true)
+            // Resize pill to fit the loaded task text
+            let newPillHeight = calculateRequiredHeight(for: current.text)
+            updatePillHeight(newPillHeight, animated: true)
         }
     }
 
@@ -344,24 +428,29 @@ extension SpotlightViewController: NSTextFieldDelegate {
         textField.placeholderString = "Hold..."
         print("🔄 [Edit Mode] Reset")
         updateEditModeUI(isEditing: false)
+        // Shrink pill back to minimum height
+        updatePillHeight(minPillHeight, animated: true)
     }
 
     private func updateEditModeUI(isEditing: Bool) {
         // No animation - instant update
         flapView.alphaValue = isEditing ? 1.0 : 0.0
         flapView.frame.origin.y = 0
-        
+
         // Toggle pencil
         pencilIconView.isHidden = !isEditing
-        
-        // Shift text field
+
+        // Update pencil icon Y position (centered in current pill)
+        pencilIconView.frame.origin.y = flapSpace + (currentPillHeight - 24) / 2
+
+        // Shift text field X position based on edit mode
         // Normal: x=20, width=560
         // Editing: x=54 (20 + 24 + 10 padding), width=526
-        if isEditing {
-            textField.frame = NSRect(x: 54, y: 42, width: 526, height: 36)
-        } else {
-            textField.frame = NSRect(x: 20, y: 42, width: 560, height: 36)
-        }
+        let textFieldX: CGFloat = isEditing ? 54 : 20
+        let textFieldWidth: CGFloat = isEditing ? 526 : 560
+        let textFieldHeight = currentPillHeight - pillVerticalPadding
+        let textFieldY = flapSpace + (currentPillHeight - textFieldHeight) / 2
+        textField.frame = NSRect(x: textFieldX, y: textFieldY, width: textFieldWidth, height: textFieldHeight)
     }
     func control(_ control: NSControl, textShouldBeginEditing fieldEditor: NSText) -> Bool {
         if let textView = fieldEditor as? NSTextView {

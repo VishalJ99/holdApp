@@ -68,4 +68,26 @@ class SpotlightPanel: NSPanel {
     func hide() {
         self.orderOut(nil)
     }
+
+    func updateHeight(_ newHeight: CGFloat, animated: Bool) {
+        let newFrame = NSRect(
+            x: frame.origin.x,
+            y: frame.origin.y - (newHeight - frame.height),  // Grow upward
+            width: frame.width,
+            height: newHeight
+        )
+
+        if animated {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.15
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                self.animator().setFrame(newFrame, display: true)
+            } completionHandler: { [weak self] in
+                self?.center()
+            }
+        } else {
+            setFrame(newFrame, display: true)
+            center()
+        }
+    }
 }
