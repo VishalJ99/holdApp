@@ -177,7 +177,13 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         let fixedTextFieldHeight = maxPillHeight - pillVerticalPadding
         let textFieldY = minPillHeight - topPadding - fixedTextFieldHeight
         textField = SubmitTextField(frame: NSRect(x: 20, y: textFieldY, width: 560, height: fixedTextFieldHeight))
-        textField.placeholderString = "Hold..."
+        textField.placeholderAttributedString = NSAttributedString(
+            string: "Hold...",
+            attributes: [
+                .foregroundColor: NSColor.white.withAlphaComponent(0.4),
+                .font: NSFont.systemFont(ofSize: 24, weight: .light)
+            ]
+        )
         textField.font = NSFont.systemFont(ofSize: 24, weight: .light)
         textField.textColor = .white
         textField.isBordered = false
@@ -455,7 +461,13 @@ extension SpotlightViewController: NSTextFieldDelegate {
     private func loadCurrentTask() {
         if let current = AppState.shared.currentTask {
             textField.stringValue = current.text
-            textField.placeholderString = "Editing task... (Press Enter to save)"
+            textField.placeholderAttributedString = NSAttributedString(
+                string: "Editing task... (Press Enter to save)",
+                attributes: [
+                    .foregroundColor: NSColor.white.withAlphaComponent(0.4),
+                    .font: NSFont.systemFont(ofSize: 24, weight: .light)
+                ]
+            )
             isEditMode = true
             editingTaskId = current.id
             print("✏️ [Edit Mode] Enabled - editing task: \(current.id)")
@@ -470,7 +482,13 @@ extension SpotlightViewController: NSTextFieldDelegate {
         isEditMode = false
         editingTaskId = nil
         textField.stringValue = ""
-        textField.placeholderString = "Hold..."
+        textField.placeholderAttributedString = NSAttributedString(
+            string: "Hold...",
+            attributes: [
+                .foregroundColor: NSColor.white.withAlphaComponent(0.4),
+                .font: NSFont.systemFont(ofSize: 24, weight: .light)
+            ]
+        )
         print("🔄 [Edit Mode] Reset")
         updateEditModeUI(isEditing: false)
         // Shrink pill back to minimum height
