@@ -117,6 +117,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         hotkeyManager.registerHotkeys()
 
+        // Start CloudKit heartbeat to keep connection warm (prevents cold start delays)
+        CloudKitManager.shared.startHeartbeat()
+
         // Initialize app state by syncing local storage with CloudKit
         initializeAppState()
 

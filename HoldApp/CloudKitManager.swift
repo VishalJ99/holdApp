@@ -6,6 +6,7 @@ class CloudKitManager {
 
     private let container: CKContainer
     private let database: CKDatabase
+    private var heartbeatTimer: Timer?
 
     private init() {
         container = CKContainer.default()
@@ -25,6 +26,34 @@ class CloudKitManager {
             print("\(emoji) [CloudKit] Environment: \(apsEnv.uppercased())")
         }
         #endif
+    }
+
+    // MARK: - Connection Warmup (Heartbeat)
+
+    /// Start 15-second heartbeat to keep CloudKit connection warm
+    func startHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
+            self?.heartbeat()
+        }
+        // Fire immediately to warm up connection
+        heartbeat()
+        print("💓 [CloudKit] Heartbeat started (15s interval)")
+    }
+
+    /// Silent fetch to keep connection alive
+    private func heartbeat() {
+        let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
+        database.fetch(withRecordID: pointerID) { _, _ in
+            // Silent - just keeping connection warm
+        }
+    }
+
+    /// Stop heartbeat timer
+    func stopHeartbeat() {
+        heartbeatTimer?.invalidate()
+        heartbeatTimer = nil
+        print("💔 [CloudKit] Heartbeat stopped")
     }
 
     // MARK: - CurrentTaskPointer Operations (iPhone Sync)
@@ -100,7 +129,8 @@ class CloudKitManager {
         }
     }
 
-    // Update the current task pointer record (bypasses query index lag)
+    // Update the current task pointer record (single operation, no fetch needed)
+    // Uses CKModifyRecordsOperation with .allKeys policy to overwrite without conflict check
     func updateCurrentTaskPointer(
         taskId: String,
         text: String,
@@ -120,119 +150,81 @@ class CloudKitManager {
 
         // Use hardcoded record ID so both macOS and iPhone know where to look
         let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
+        let record = CKRecord(recordType: "CurrentTaskPointer", recordID: pointerID)
 
-        // Try to fetch existing pointer record
-        database.fetch(withRecordID: pointerID) { [weak self] record, error in
-            guard let self = self else { return }
+        // Set all fields
+        record["currentTaskId"] = taskId as CKRecordValue
+        record["currentTaskText"] = text as CKRecordValue
+        record["parentId"] = parentId as CKRecordValue?
+        record["rootId"] = rootId as CKRecordValue?
+        record["parentTaskText"] = parentTaskText as CKRecordValue?
+        record["rootTaskText"] = rootTaskText as CKRecordValue?
+        record["showEllipsis"] = (showEllipsis ? 1 : 0) as CKRecordValue
+        record["siblingPosition"] = siblingPosition as CKRecordValue?
+        record["siblingCount"] = siblingCount as CKRecordValue?
+        record["timestamp"] = Date() as CKRecordValue
 
-            if let existingRecord = record {
-                // Pointer exists - update it
-                print("📝 [CloudKit] Found existing pointer, updating...")
-                existingRecord["currentTaskId"] = taskId as CKRecordValue
-                existingRecord["currentTaskText"] = text as CKRecordValue
-                existingRecord["parentId"] = parentId as CKRecordValue?
-                existingRecord["rootId"] = rootId as CKRecordValue?
-                existingRecord["parentTaskText"] = parentTaskText as CKRecordValue?
-                existingRecord["rootTaskText"] = rootTaskText as CKRecordValue?
-                existingRecord["showEllipsis"] = (showEllipsis ? 1 : 0) as CKRecordValue
-                existingRecord["siblingPosition"] = siblingPosition as CKRecordValue?
-                existingRecord["siblingCount"] = siblingCount as CKRecordValue?
-                existingRecord["timestamp"] = Date() as CKRecordValue
+        // Use CKModifyRecordsOperation with .allKeys to skip fetch and overwrite directly
+        let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+        operation.savePolicy = .allKeys  // Overwrite without checking recordChangeTag
+        operation.qualityOfService = .userInitiated  // High priority, immediate execution
 
-                self.database.save(existingRecord) { savedRecord, saveError in
-                    let pointerTime = Date().timeIntervalSince(pointerStartTime)
-                    if let saveError = saveError {
-                        print("❌ [CloudKit] Pointer update failed after \(String(format: "%.2f", pointerTime))s: \(saveError.localizedDescription)")
-                        completion(saveError)
-                    } else {
-                        print("✅ [CloudKit] Pointer updated in \(String(format: "%.2f", pointerTime))s")
-                        print("🔗 [Pointer Summary] text=\"\(text)\" | taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
-                        completion(nil)
-                    }
-                }
-            } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
-                // Pointer doesn't exist - create it
-                print("📝 [CloudKit] Pointer doesn't exist, creating new one...")
-                let newRecord = CKRecord(recordType: "CurrentTaskPointer", recordID: pointerID)
-                newRecord["currentTaskId"] = taskId as CKRecordValue
-                newRecord["currentTaskText"] = text as CKRecordValue
-                newRecord["parentId"] = parentId as CKRecordValue?
-                newRecord["rootId"] = rootId as CKRecordValue?
-                newRecord["parentTaskText"] = parentTaskText as CKRecordValue?
-                newRecord["rootTaskText"] = rootTaskText as CKRecordValue?
-                newRecord["showEllipsis"] = (showEllipsis ? 1 : 0) as CKRecordValue
-                newRecord["siblingPosition"] = siblingPosition as CKRecordValue?
-                newRecord["siblingCount"] = siblingCount as CKRecordValue?
-                newRecord["timestamp"] = Date() as CKRecordValue
-
-                self.database.save(newRecord) { savedRecord, saveError in
-                    let pointerTime = Date().timeIntervalSince(pointerStartTime)
-                    if let saveError = saveError {
-                        print("❌ [CloudKit] Pointer creation failed after \(String(format: "%.2f", pointerTime))s: \(saveError.localizedDescription)")
-                        completion(saveError)
-                    } else {
-                        print("✅ [CloudKit] Pointer created in \(String(format: "%.2f", pointerTime))s")
-                        print("🔗 [Pointer Summary] text=\"\(text)\" | taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
-                        completion(nil)
-                    }
-                }
-            } else {
-                // Unexpected error
-                let pointerTime = Date().timeIntervalSince(pointerStartTime)
-                print("❌ [CloudKit] Pointer fetch error after \(String(format: "%.2f", pointerTime))s: \(error?.localizedDescription ?? "unknown")")
+        operation.modifyRecordsResultBlock = { result in
+            let pointerTime = Date().timeIntervalSince(pointerStartTime)
+            switch result {
+            case .success:
+                print("✅ [CloudKit] Pointer updated in \(String(format: "%.2f", pointerTime))s (single operation, .userInitiated QoS)")
+                print("🔗 [Pointer Summary] text=\"\(text)\" | taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
+                completion(nil)
+            case .failure(let error):
+                print("❌ [CloudKit] Pointer update failed after \(String(format: "%.2f", pointerTime))s: \(error.localizedDescription)")
                 completion(error)
             }
         }
+
+        database.add(operation)
     }
 
     // Clear the current task pointer (for empty state or startup sync)
+    // Uses CKModifyRecordsOperation with .allKeys policy to overwrite without conflict check
     func clearCurrentTaskPointer(completion: @escaping (Error?) -> Void) {
         let clearStartTime = Date()
         print("🗑️ [CloudKit] Clearing CurrentTaskPointer at \(clearStartTime)")
 
         let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
+        let record = CKRecord(recordType: "CurrentTaskPointer", recordID: pointerID)
 
-        // Fetch existing pointer first (same pattern as updateCurrentTaskPointer)
-        database.fetch(withRecordID: pointerID) { [weak self] record, error in
-            guard let self = self else { return }
+        // Set all fields to nil/empty
+        record["currentTaskId"] = nil as String?
+        record["currentTaskText"] = nil as String?
+        record["parentId"] = nil as String?
+        record["rootId"] = nil as String?
+        record["parentTaskText"] = nil as String?
+        record["rootTaskText"] = nil as String?
+        record["showEllipsis"] = 0 as CKRecordValue
+        record["siblingPosition"] = nil as Int?
+        record["siblingCount"] = nil as Int?
+        record["timestamp"] = Date() as CKRecordValue
 
-            if let existingRecord = record {
-                // Pointer exists - clear all fields
-                print("📝 [CloudKit] Found existing pointer, clearing fields...")
-                existingRecord["currentTaskId"] = nil as String?
-                existingRecord["currentTaskText"] = nil as String?
-                existingRecord["parentId"] = nil as String?
-                existingRecord["rootId"] = nil as String?
-                existingRecord["parentTaskText"] = nil as String?
-                existingRecord["rootTaskText"] = nil as String?
-                existingRecord["showEllipsis"] = false
-                existingRecord["siblingPosition"] = nil as Int?
-                existingRecord["siblingCount"] = nil as Int?
-                existingRecord["timestamp"] = Date() as CKRecordValue
+        // Use CKModifyRecordsOperation with .allKeys to skip fetch and overwrite directly
+        let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+        operation.savePolicy = .allKeys  // Overwrite without checking recordChangeTag
+        operation.qualityOfService = .userInitiated  // High priority, immediate execution
 
-                self.database.save(existingRecord) { savedRecord, saveError in
-                    let clearTime = Date().timeIntervalSince(clearStartTime)
-                    if let saveError = saveError {
-                        print("❌ [CloudKit] Clear pointer failed after \(String(format: "%.2f", clearTime))s: \(saveError.localizedDescription)")
-                        completion(saveError)
-                    } else {
-                        print("✅ [CloudKit] CurrentTaskPointer cleared in \(String(format: "%.2f", clearTime))s")
-                        print("📱 [CloudKit] iPhone will now show 'No current task'")
-                        completion(nil)
-                    }
-                }
-            } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
-                // Pointer doesn't exist - nothing to clear
-                let clearTime = Date().timeIntervalSince(clearStartTime)
-                print("ℹ️ [CloudKit] Pointer doesn't exist, nothing to clear (completed in \(String(format: "%.2f", clearTime))s)")
+        operation.modifyRecordsResultBlock = { result in
+            let clearTime = Date().timeIntervalSince(clearStartTime)
+            switch result {
+            case .success:
+                print("✅ [CloudKit] CurrentTaskPointer cleared in \(String(format: "%.2f", clearTime))s (single operation, .userInitiated QoS)")
+                print("📱 [CloudKit] iPhone will now show 'No current task'")
                 completion(nil)
-            } else {
-                // Unexpected error
-                let clearTime = Date().timeIntervalSince(clearStartTime)
-                print("❌ [CloudKit] Pointer fetch error after \(String(format: "%.2f", clearTime))s: \(error?.localizedDescription ?? "unknown")")
+            case .failure(let error):
+                print("❌ [CloudKit] Clear pointer failed after \(String(format: "%.2f", clearTime))s: \(error.localizedDescription)")
                 completion(error)
             }
         }
+
+        database.add(operation)
     }
 
     // Subscribe to current task pointer changes (for real-time updates on iPhone)
