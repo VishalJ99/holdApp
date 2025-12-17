@@ -460,7 +460,10 @@ extension SpotlightViewController: NSTextFieldDelegate {
 
     private func loadCurrentTask() {
         if let current = AppState.shared.currentTask {
-            textField.stringValue = current.text
+            // End any existing editing session to ensure clean state
+            textField.window?.makeFirstResponder(nil)
+
+            // Set placeholder BEFORE stringValue (setting placeholder clears stringValue)
             textField.placeholderAttributedString = NSAttributedString(
                 string: "Editing task... (Press Enter to save)",
                 attributes: [
@@ -468,20 +471,27 @@ extension SpotlightViewController: NSTextFieldDelegate {
                     .font: NSFont.systemFont(ofSize: 24, weight: .light)
                 ]
             )
+
+            textField.stringValue = current.text
             isEditMode = true
             editingTaskId = current.id
             print("✏️ [Edit Mode] Enabled - editing task: \(current.id)")
             updateEditModeUI(isEditing: true)
+
             // Resize pill to fit the loaded task text
             let newPillHeight = calculateRequiredHeight(for: current.text)
             updatePillHeight(newPillHeight, animated: true)
+
+            // Re-establish first responder so field editor gets correct placeholder
+            textField.window?.makeFirstResponder(textField)
         }
     }
 
     func resetEditMode() {
         isEditMode = false
         editingTaskId = nil
-        textField.stringValue = ""
+
+        // Set placeholder before stringValue for consistency
         textField.placeholderAttributedString = NSAttributedString(
             string: "Hold...",
             attributes: [
@@ -489,6 +499,8 @@ extension SpotlightViewController: NSTextFieldDelegate {
                 .font: NSFont.systemFont(ofSize: 24, weight: .light)
             ]
         )
+        textField.stringValue = ""
+
         print("🔄 [Edit Mode] Reset")
         updateEditModeUI(isEditing: false)
         // Shrink pill back to minimum height
