@@ -7,6 +7,9 @@
 
 import SwiftUI
 import CloudKit
+import os
+
+private let logger = Logger(subsystem: "com.vishaljain.HoldApp", category: "iOS-ContentView")
 
 struct ContentView: View {
     // Hierarchy display state
@@ -42,6 +45,7 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            logger.error("[VIEW] onAppear - starting init")
             print("📲 [ContentView] View appeared - initializing...")
 
             // Keep screen on while displaying task (like YouTube)
@@ -56,6 +60,7 @@ struct ContentView: View {
     }
 
     func fetchCurrentTask() {
+        logger.error("[FETCH] fetchCurrentTask called")
         let fetchRequestTime = Date()
         print("📲 [ContentView] Fetch requested at \(fetchRequestTime)")
 
@@ -83,6 +88,7 @@ struct ContentView: View {
                     self.siblingPosition = siblingPos
                     self.siblingTotal = siblingCnt
 
+                    logger.error("[FETCH] SUCCESS - taskId=\(taskData.taskId ?? "nil") text=\(String(describing: currentText?.prefix(30)))")
                     print("✅ [ContentView] UI updated in \(String(format: "%.2f", totalTime))s")
                     print("📲 [ContentView] Hierarchy:")
                     print("   Root: \(rootText ?? "nil")")
@@ -96,6 +102,7 @@ struct ContentView: View {
                 let totalTime = Date().timeIntervalSince(fetchRequestTime)
                 DispatchQueue.main.async {
                     self.isLoading = false
+                    logger.error("[FETCH] FAILED - \(error.localizedDescription)")
                     print("❌ [ContentView] Error fetching task after \(String(format: "%.2f", totalTime))s: \(error)")
                 }
             }
@@ -103,10 +110,12 @@ struct ContentView: View {
     }
 
     func setupCloudKitSubscription() {
+        logger.error("[SUB] setupCloudKitSubscription called")
         print("🔔 [ContentView] Setting up CloudKit subscription and notification observer...")
 
         // Subscribe to task changes
         CloudKitManager.shared.subscribeToTaskChanges { error in
+            logger.error("[SUB] Result - error=\(error?.localizedDescription ?? "none")")
             if let error = error {
                 print("❌ [ContentView] Subscription setup failed: \(error)")
             } else {

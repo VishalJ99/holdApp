@@ -89,10 +89,18 @@ Root/Sibling Selection:
 - Cmd+Enter → Sibling, no switch
 - Ctrl+Enter → Top-level + switch
 - Cmd+Ctrl+Enter → Sibling + switch
+- Cmd+Shift+Enter → Swap (new task becomes parent of current, stay on current)
 
-**Implementation** (`SpotlightViewController.swift:125-150`):
+**Swap Modifier** (Cmd+Shift+Enter):
+- Captures "I'm doing X for Y" thinking - type Y, swap, X is now under Y
+- New task takes current task's position in hierarchy
+- Current task becomes child of new task
+- Stays on current task (the actionable item)
+- Use case: ADHD "dependency-first" capture where you think of the action before the goal
+
+**Implementation** (`SpotlightViewController.swift:407-412`):
 - Loads modifier preferences from UserDefaults
-- Checks which configured modifiers are pressed
+- Checks which configured modifiers are pressed (combo check first)
 - Maps to `TaskCreationType` enum
 - Routes to `AppDelegate.handleTaskCreation()`
 
@@ -503,14 +511,15 @@ ToastManager.shared.show("Error message", level: .error)
 
 **Visual Style**: Matches Spotlight pill (frosted glass, 30px corners, white border)
 
-**Pages** (7 total):
+**Pages** (8 total):
 1. Philosophy - "Hold frees your mind"
 2. Capture - Cmd+Shift+Space to open Spotlight
 3. Hierarchy - Modifier keys for child/sibling/switch
 4. Navigate - Leaf/Root selectors, Cmd+P
-5. Complete - Dismiss and Nuke shortcuts
-6. Customize - Preferences for hotkeys
-7. Get Started - Final page with button
+5. Quick Edit - Up Arrow to edit, Cmd+P to re-parent
+6. Complete - Dismiss and Nuke shortcuts
+7. Customize - Preferences for hotkeys
+8. Get Started - Final page with button
 
 **First-Launch Detection**: `UserDefaults.standard.bool(forKey: "hasSeenOnboarding")`
 

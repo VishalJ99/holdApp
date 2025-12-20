@@ -405,9 +405,12 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         let isSwitchPressed = modifiers.contains(prefs.switchModifier.nsEventFlags)
 
         // Determine task creation type using compositional logic
-        // Child modifier always implies switch (going deeper in tree)
+        // Check combinations first, then individual modifiers
         let creationType: TaskCreationType
-        if isChildPressed {
+        if isChildPressed && isSiblingPressed && !isSwitchPressed {
+            // Child + Sibling (Cmd+Shift) - swap: new task becomes parent of current
+            creationType = .swap
+        } else if isChildPressed {
             // Child modifier - create child and auto-switch
             creationType = .child
         } else if isSiblingPressed && isSwitchPressed {

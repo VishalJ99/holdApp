@@ -47,4 +47,5 @@ enum TaskCreationType {
     case child                 // Shift+Enter - create as child of current
     case sibling               // Cmd+Enter - create as sibling of current
     case siblingAndSwitch      // Cmd+Ctrl+Enter - create sibling and switch
+    case swap                  // Cmd+Shift+Enter - create as parent of current, stay on current
 }

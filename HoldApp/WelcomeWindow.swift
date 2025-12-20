@@ -75,6 +75,7 @@ struct WelcomeView: View {
                 .text("To maintain a relationship:"),
                 .command(cmd: "Shift+Enter", description: "Child of current"),
                 .command(cmd: "Cmd+Enter", description: "Sibling of current"),
+                .command(cmd: "Cmd+Shift+Enter", description: "New parent of current"),
                 .spacer,
                 .text("Hold Ctrl to also switch,"),
                 .command(cmd: "Ctrl+Cmd+Enter", description: "Sibling + switch"),
@@ -96,7 +97,20 @@ struct WelcomeView: View {
             ]
         ),
 
-        // Page 5: Complete tasks
+        // Page 5: Quick Edit
+        OnboardingPage(
+            title: "Quick Edit",
+            lines: [
+                .text("Need to fix a typo or restructure?"),
+                .spacer,
+                .command(cmd: "↑", suffix: "(Up Arrow)", description: "Edit current task"),
+                .command(cmd: "Cmd+P", suffix: "(in edit)", description: "Re-parent task"),
+                .spacer,
+                .text("Press Enter to save, Escape to cancel.")
+            ]
+        ),
+
+        // Page 6: Complete tasks
         OnboardingPage(
             title: "Complete tasks",
             lines: [
@@ -105,7 +119,7 @@ struct WelcomeView: View {
             ]
         ),
 
-        // Page 6: Customize
+        // Page 7: Customize
         OnboardingPage(
             title: "Make it yours",
             lines: [
@@ -114,7 +128,7 @@ struct WelcomeView: View {
             ]
         ),
 
-        // Page 7: Get Started
+        // Page 8: Get Started
         OnboardingPage(
             title: "Your iPhone is waiting.",
             isLastPage: true
@@ -421,7 +435,7 @@ struct WelcomeContentWrapper: View {
                     withAnimation { if currentPage > 0 { currentPage -= 1 } }
                     return nil
                 } else if event.keyCode == 124 { // Right arrow
-                    withAnimation { if currentPage < 6 { currentPage += 1 } }
+                    withAnimation { if currentPage < 7 { currentPage += 1 } }
                     return nil
                 }
                 return event
