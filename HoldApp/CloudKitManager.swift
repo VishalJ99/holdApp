@@ -1,5 +1,8 @@
 import Foundation
 import CloudKit
+import os
+
+private let logger = Logger(subsystem: "com.vishaljain.HoldApp", category: "CloudKitManager")
 
 class CloudKitManager {
     static let shared = CloudKitManager()
@@ -13,6 +16,7 @@ class CloudKitManager {
         database = container.privateCloudDatabase
 
         // Log CloudKit configuration
+        logger.error("[INIT] Container=\(self.container.containerIdentifier ?? "nil")")
         print("☁️ [CloudKit] Initialized")
         print("📦 [CloudKit] Container: \(container.containerIdentifier ?? "unknown")")
         print("🌍 [CloudKit] Database: Private")
@@ -38,14 +42,23 @@ class CloudKitManager {
         }
         // Fire immediately to warm up connection
         heartbeat()
+        logger.error("[HEARTBEAT] Started 15s timer")
         print("💓 [CloudKit] Heartbeat started (15s interval)")
     }
 
     /// Silent fetch to keep connection alive
     private func heartbeat() {
         let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
-        database.fetch(withRecordID: pointerID) { _, _ in
-            // Silent - just keeping connection warm
+        database.fetch(withRecordID: pointerID) { record, error in
+            if let record = record {
+                logger.error("[HEARTBEAT] OK - record exists")
+            } else if let ckError = error as? CKError, ckError.code == .unknownItem {
+                logger.error("[HEARTBEAT] MISSING - pointer record does not exist")
+            } else if let error = error {
+                logger.error("[HEARTBEAT] ERROR - \(error.localizedDescription, privacy: .public)")
+            } else {
+                logger.error("[HEARTBEAT] FAILED - unknown reason")
+            }
         }
     }
 
@@ -72,6 +85,7 @@ class CloudKitManager {
         siblingPosition: Int?,
         siblingCount: Int?
     ), Error>) -> Void) {
+        logger.error("[FETCH] fetchCurrentTask called")
         let fetchStartTime = Date()
         print("⏱️ [CloudKit] Starting fetch for current task at \(fetchStartTime)")
 
@@ -92,6 +106,7 @@ class CloudKitManager {
                 let siblingPosition = record["siblingPosition"] as? Int
                 let siblingCount = record["siblingCount"] as? Int
 
+                logger.error("[FETCH] OK - pointer record found")
                 print("✅ [CloudKit] Current task fetched in \(String(format: "%.2f", fetchTime))s")
                 print("📝 [CloudKit] Fetched from pointer (instant, no index lag)")
                 print("🔗 [Fetch Summary] text=\"\(text ?? "nil")\" | taskId=\(taskId ?? "nil") | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
@@ -109,6 +124,7 @@ class CloudKitManager {
                 )))
             } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
                 // Pointer doesn't exist yet (no current task set)
+                logger.error("[FETCH] MISSING - no pointer record exists")
                 print("ℹ️ [CloudKit] Fetch completed in \(String(format: "%.2f", fetchTime))s: No current task pointer found")
                 completion(.success((
                     taskId: nil,
@@ -123,6 +139,7 @@ class CloudKitManager {
                 )))
             } else {
                 // Unexpected error
+                logger.error("[FETCH] ERROR - \(error?.localizedDescription ?? "unknown", privacy: .public)")
                 print("❌ [CloudKit] Fetch failed after \(String(format: "%.2f", fetchTime))s: \(error?.localizedDescription ?? "unknown")")
                 completion(.failure(error ?? NSError(domain: "CloudKitManager", code: -1, userInfo: nil)))
             }
@@ -143,6 +160,7 @@ class CloudKitManager {
         siblingCount: Int?,
         completion: @escaping (Error?) -> Void
     ) {
+        logger.error("[SAVE] updateCurrentTaskPointer called")
         let pointerStartTime = Date()
         print("🎯 [CloudKit] Updating current task pointer at \(pointerStartTime)")
         print("🔗 [Pointer Update] taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
@@ -173,10 +191,12 @@ class CloudKitManager {
             let pointerTime = Date().timeIntervalSince(pointerStartTime)
             switch result {
             case .success:
+                logger.error("[SAVE] OK - pointer saved to CloudKit")
                 print("✅ [CloudKit] Pointer updated in \(String(format: "%.2f", pointerTime))s (single operation, .userInitiated QoS)")
                 print("🔗 [Pointer Summary] text=\"\(text)\" | taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
                 completion(nil)
             case .failure(let error):
+                logger.error("[SAVE] ERROR - \(error.localizedDescription, privacy: .public)")
                 print("❌ [CloudKit] Pointer update failed after \(String(format: "%.2f", pointerTime))s: \(error.localizedDescription)")
                 completion(error)
             }
@@ -188,6 +208,7 @@ class CloudKitManager {
     // Clear the current task pointer (for empty state or startup sync)
     // Uses CKModifyRecordsOperation with .allKeys policy to overwrite without conflict check
     func clearCurrentTaskPointer(completion: @escaping (Error?) -> Void) {
+        logger.error("[CLEAR] clearCurrentTaskPointer called")
         let clearStartTime = Date()
         print("🗑️ [CloudKit] Clearing CurrentTaskPointer at \(clearStartTime)")
 
@@ -215,10 +236,12 @@ class CloudKitManager {
             let clearTime = Date().timeIntervalSince(clearStartTime)
             switch result {
             case .success:
+                logger.error("[CLEAR] OK - pointer cleared")
                 print("✅ [CloudKit] CurrentTaskPointer cleared in \(String(format: "%.2f", clearTime))s (single operation, .userInitiated QoS)")
                 print("📱 [CloudKit] iPhone will now show 'No current task'")
                 completion(nil)
             case .failure(let error):
+                logger.error("[CLEAR] ERROR - \(error.localizedDescription, privacy: .public)")
                 print("❌ [CloudKit] Clear pointer failed after \(String(format: "%.2f", clearTime))s: \(error.localizedDescription)")
                 completion(error)
             }
@@ -229,6 +252,7 @@ class CloudKitManager {
 
     // Subscribe to current task pointer changes (for real-time updates on iPhone)
     func subscribeToTaskChanges(completion: @escaping (Error?) -> Void) {
+        logger.error("[SUB] subscribeToTaskChanges called")
         print("🔔 [CloudKit] Setting up subscription...")
 
         let subscription = CKQuerySubscription(
@@ -247,6 +271,7 @@ class CloudKitManager {
 
         database.save(subscription) { savedSubscription, error in
             if let error = error {
+                logger.error("[SUB] ERROR - \(error.localizedDescription, privacy: .public)")
                 print("❌ [CloudKit] Subscription failed: \(error.localizedDescription)")
                 if let ckError = error as? CKError {
                     print("❌ [CloudKit] CKError code: \(ckError.errorCode)")
@@ -254,6 +279,7 @@ class CloudKitManager {
                 }
                 completion(error)
             } else if let savedSubscription = savedSubscription {
+                logger.error("[SUB] OK - subscription created")
                 print("✅ [CloudKit] Subscription created successfully!")
                 print("📝 [CloudKit] Subscription ID: \(savedSubscription.subscriptionID)")
                 completion(nil)

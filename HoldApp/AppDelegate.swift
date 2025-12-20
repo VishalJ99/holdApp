@@ -6,6 +6,9 @@
 //
 
 import Cocoa
+import os
+
+private let logger = Logger(subsystem: "com.vishaljain.HoldApp", category: "AppDelegate")
 
 @main
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -26,6 +29,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var nukeConfirmationTimer: Timer?
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
+        // Test Logger for Console.app visibility
+        logger.error("🚀 HI FROM XCODE - Logger test")
+
         // Close the default storyboard window (LSUIElement app doesn't need main window)
         for window in NSApplication.shared.windows {
             window.close()
@@ -118,9 +124,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.registerHotkeys()
 
         // Start CloudKit heartbeat to keep connection warm (prevents cold start delays)
+        logger.error("[STARTUP] Calling CloudKitManager.startHeartbeat()")
         CloudKitManager.shared.startHeartbeat()
 
         // Initialize app state by syncing local storage with CloudKit
+        logger.error("[STARTUP] Calling initializeAppState()")
         initializeAppState()
 
         // Show onboarding on first launch
@@ -226,6 +234,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return
             }
             createSiblingTask(text: text, reference: current, switchTo: true)
+
+        case .swap:
+            guard let current = AppState.shared.currentTask else {
+                // Should not happen - modifiers blocked when no current task
+                return
+            }
+            createSwapTask(text: text, current: current)
         }
 
         spotlightPanel.hide()
@@ -259,6 +274,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.setCurrent(id: taskId, text: text, parentId: parentId, rootId: rootId)
 
             // Update pointer with display info (top-level has no hierarchy)
+            logger.error("[TASK] Top-level task created")
             CloudKitManager.shared.updateCurrentTaskPointer(
                 taskId: taskId,
                 text: text,
@@ -335,6 +351,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.setCurrent(id: taskId, text: text, parentId: parent.id, rootId: rootId)
 
         // Update pointer with all pre-calculated display info
+        logger.error("[TASK] Child task created")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: taskId,
             text: text,
@@ -443,6 +460,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Update pointer with complete display info
+        logger.error("[TASK] Sibling task created")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: displayTaskId,
             text: displayText,
@@ -464,6 +482,113 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Log to file for backup
         logManager.log(text: text, id: taskId, parentId: reference.parentId, rootId: rootId)
+    }
+
+    private func createSwapTask(text: String, current: TaskReference) {
+        // Swap: New task takes current's place in hierarchy, current becomes child of new
+        // This captures "I'm doing X, which is for Y" - type Y, swap, X is now under Y
+
+        print("📝 [Task Creation] Type: swap")
+        print("📊 [Task Creation] Current task: id=\(current.id) | parent_id=\(current.parentId ?? "nil") | root_id=\(current.rootId ?? "nil")")
+
+        let newTaskId = UUID().uuidString
+        let timestamp = Date()
+
+        // 1. Determine new task's hierarchy position
+        // New task takes current's parent (becomes sibling of what current was sibling to)
+        // If current was root, new task becomes the new root
+        let newTaskParentId = current.parentId  // Same parent as current had (or nil if current was root)
+        let newTaskRootId: String?
+        if current.parentId == nil {
+            // Current was a root, so new task becomes the new root
+            newTaskRootId = nil  // New task IS the root
+        } else {
+            // Current had a parent, new task inherits the same root
+            newTaskRootId = current.rootId
+        }
+
+        print("🌲 [Swap] New task position: parent_id=\(newTaskParentId ?? "nil"), root_id=\(newTaskRootId ?? "nil (is root)")")
+
+        // 2. Save new task to local storage
+        LocalTaskStore.shared.saveTask(
+            id: newTaskId,
+            text: text,
+            timestamp: timestamp,
+            parent_id: newTaskParentId,
+            root_id: newTaskRootId,
+            isCompleted: false
+        )
+
+        // 3. Update current task to become child of new task
+        // Current's new root_id is either the new task's root, or the new task itself if new task is root
+        let currentNewRootId = newTaskRootId ?? newTaskId
+
+        let success = LocalTaskStore.shared.updateTaskParent(
+            id: current.id,
+            newParentId: newTaskId,
+            newRootId: currentNewRootId
+        )
+
+        if !success {
+            print("⚠️ [Swap] Failed to update current task's parent")
+            ToastManager.shared.show("Swap failed", level: .error)
+            return
+        }
+
+        print("✅ [Swap] Current task re-parented under new task")
+
+        // 4. Update AppState with current task's new hierarchy (stay on current)
+        AppState.shared.setCurrent(
+            id: current.id,
+            text: current.text,
+            parentId: newTaskId,  // New parent is the swap task
+            rootId: currentNewRootId
+        )
+
+        // 5. Update CloudKit pointer with updated hierarchy info
+        // Fetch display info for iPhone
+        var parentTaskText: String? = text  // Parent is the new swap task
+        var rootTaskText: String? = nil
+        var showEllipsis = false
+        var leafPosition: Int? = nil
+        var leafCount: Int? = nil
+
+        // Fetch root text if root exists and is different from parent
+        if let rootId = newTaskRootId, rootId != newTaskId {
+            let rootTask = LocalTaskStore.shared.fetchTaskById(rootId)
+            rootTaskText = rootTask?.text
+
+            // Check if parent's parent != root for ellipsis
+            if let newTaskParentId = newTaskParentId, newTaskParentId != rootId {
+                showEllipsis = true
+            }
+        }
+
+        // Fetch leaves in DFS order
+        let leaves = LocalTaskStore.shared.fetchLeavesDFS(rootId: currentNewRootId)
+        leafCount = leaves.count
+        leafPosition = (leaves.firstIndex(where: { $0.id == current.id }) ?? -1) + 1
+
+        logger.error("[TASK] Swap task created")
+        CloudKitManager.shared.updateCurrentTaskPointer(
+            taskId: current.id,
+            text: current.text,
+            parentId: newTaskId,
+            rootId: currentNewRootId,
+            parentTaskText: parentTaskText,
+            rootTaskText: rootTaskText,
+            showEllipsis: showEllipsis,
+            siblingPosition: leafPosition,
+            siblingCount: leafCount
+        ) { error in
+            if let error = error {
+                print("⚠️ [AppDelegate] Pointer update failed: \(error.localizedDescription)")
+            }
+        }
+
+        // 6. Toast and log
+        ToastManager.shared.show("Swapped under: \(text)", level: .success)
+        logManager.log(text: text, id: newTaskId, parentId: newTaskParentId, rootId: newTaskRootId)
     }
 
     private func createTaskWithCustomParent(text: String, customParentId: String, switchToTask: Bool) {
@@ -565,6 +690,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Update CloudKit pointer
+        logger.error("[TASK] Custom parent task created")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: displayTaskId,
             text: displayText,
@@ -681,6 +807,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Update pointer with complete display info
+        logger.error("[NAV] Leaf switch")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: taskId,
             text: text,
@@ -793,6 +920,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("📊 [Root Switch] All fetches complete - updating pointer")
 
         // Update CurrentTaskPointer with all display metadata
+        logger.error("[NAV] Root switch")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: taskId,
             text: text,
@@ -944,6 +1072,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("✅ [Re-parent] Leaf info (DFS): position=\(leafPosition ?? 0)/\(leafCount ?? 0)")
 
         // Update CloudKit pointer
+        logger.error("[NAV] Re-parent")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: taskId,
             text: newText,
@@ -1071,6 +1200,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         AppState.shared.clearCurrent()
 
         // Clear CloudKit pointer so iPhone shows "No current task"
+        logger.error("[DISMISS] No tasks remaining - clearing pointer")
         CloudKitManager.shared.clearCurrentTaskPointer { error in
             if let error = error {
                 print("⚠️ [Dismiss] Failed to clear pointer: \(error.localizedDescription)")
@@ -1085,6 +1215,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     /// Navigate to a task and update CloudKit pointer
     /// Helper function used by dismissCurrentTask
     private func navigateToTask(task: LocalTaskStore.Task, reason: String) {
+        logger.error("[NAV] navigateToTask called")
         print("🔄 [Navigate] Switching to task: \(task.text) (reason: \(reason))")
 
         let taskId = task.id
@@ -1155,6 +1286,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         if allTasks.isEmpty {
             print("📭 [Startup] Local storage is empty - clearing CloudKit pointer")
+            logger.error("[INIT] No local tasks - clearing pointer")
             CloudKitManager.shared.clearCurrentTaskPointer { error in
                 if let error = error {
                     print("⚠️ [Startup] Failed to clear pointer: \(error.localizedDescription)")
@@ -1229,6 +1361,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Update CloudKit pointer
+        logger.error("[INIT] Updating pointer with startup task")
         print("☁️ [Startup] Syncing pointer to CloudKit...")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: latestInTree.id,
@@ -1321,6 +1454,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Update pointer with new text + existing metadata
+        logger.error("[EDIT] Task text updated")
         CloudKitManager.shared.updateCurrentTaskPointer(
             taskId: taskId,
             text: newText,  // Updated text
@@ -1360,6 +1494,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             print("✅ [Nuke] Cleared AppState")
 
             // Clear CloudKit pointer
+            logger.error("[NUKE] Clearing all data including pointer")
             CloudKitManager.shared.clearCurrentTaskPointer { error in
                 if let error = error {
                     print("⚠️ [Nuke] Failed to clear pointer: \(error.localizedDescription)")
