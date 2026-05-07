@@ -1,0 +1,22 @@
+Hold App Store screenshot reproduction
+
+Generated for App Store Connect listing assets on May 7, 2026.
+
+Source inputs:
+- Repository: https://github.com/VishalJ99/holdApp
+- App vision: design/Vision.md
+- iOS focus display UI: HoldApp-iOS/ContentView.swift
+- macOS app/product UI intent: .claude/SYSTEM_ARCHITECTURE.md
+
+Generation command:
+- `bash app-store-assets/generate_screenshots.sh`
+
+Outputs:
+  - screenshots/hold-iphone-65.png (1242x2688)
+  - screenshots/hold-ipad-129.png (2048x2732)
+  - screenshots/hold-mac-desktop.png (2880x1800)
+
+Notes:
+- Screenshots are generated marketing screenshots that represent the app's actual one-task display and Mac quick-capture workflow.
+- They are intentionally minimal and use real product copy from design/Vision.md.
+- No user task data was used.
