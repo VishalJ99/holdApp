@@ -34,3 +34,9 @@ THESE RULES ARE ABSOLUTE AND APPLY AT ALL TIMES.
 
 **Search Real Code** - 
 `searchGitHub` - Search actual use cases on GitHub 
+
+## Hold App Store Release Notes
+
+- Use `release_guide.md` as the high-level release playbook for local App Store landing-page preview, metadata validation, Xcode archive/upload, App Store Connect submission, and monitoring.
+- For App Store archives/uploads, use Xcode 26 from `/Applications/Xcode.app` explicitly, for example `/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild` or `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer`. The selected developer directory may point at an older Xcode in `~/Downloads`; that can build with an older iOS SDK and fail App Store Connect upload validation.
+- For App Store review submission automation, do not create deprecated `appStoreVersionSubmissions`; App Store Connect now rejects that create call. Attach the processed build to the `appStoreVersion`, set build export compliance if needed, then use the current review submission flow: create or reuse `reviewSubmissions`, add the `appStoreVersion` through `reviewSubmissionItems`, and submit by patching the `reviewSubmission` with `submitted: true`.

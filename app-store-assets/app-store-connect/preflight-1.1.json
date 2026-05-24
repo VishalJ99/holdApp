@@ -1,0 +1,357 @@
+{
+  "generatedAt": "2026-05-23T23:36:26Z",
+  "app": {
+    "id": "6755408368",
+    "bundleId": "com.vishaljain.HoldApp"
+  },
+  "locale": "en-GB",
+  "targetVersion": "1.1",
+  "uploadScreenshots": true,
+  "replaceScreenshots": true,
+  "applyRequiredForMutation": true,
+  "localProjectVersions": {
+    "IOS": [
+      {
+        "configuration": "Debug",
+        "marketingVersion": "1.1",
+        "buildNumber": "9",
+        "bundleId": "com.vishaljain.HoldApp"
+      },
+      {
+        "configuration": "Release",
+        "marketingVersion": "1.1",
+        "buildNumber": "9",
+        "bundleId": "com.vishaljain.HoldApp"
+      }
+    ],
+    "MAC_OS": [
+      {
+        "configuration": "Debug",
+        "marketingVersion": "1.1",
+        "buildNumber": "10",
+        "bundleId": "com.vishaljain.HoldApp"
+      },
+      {
+        "configuration": "Release",
+        "marketingVersion": "1.1",
+        "buildNumber": "10",
+        "bundleId": "com.vishaljain.HoldApp"
+      }
+    ]
+  },
+  "versionWarnings": [
+
+  ],
+  "platforms": [
+    {
+      "platform": "IOS",
+      "listing": {
+        "platform": "IOS",
+        "source": "/Users/vishaljain/xcode_projects/HoldApp/app-store-assets/app-store-connect/ios-listing.md",
+        "fieldLengths": {
+          "name": {
+            "length": 4,
+            "limit": 30
+          },
+          "subtitle": {
+            "length": 25,
+            "limit": 30
+          },
+          "promotional_text": {
+            "length": 103,
+            "limit": 170
+          },
+          "description": {
+            "length": 1156,
+            "limit": 4000
+          },
+          "keywords": {
+            "length": 82,
+            "limit": 100
+          },
+          "whats_new": {
+            "length": 64,
+            "limit": 4000
+          }
+        },
+        "screenshots": [
+          {
+            "path": "/Users/vishaljain/xcode_projects/HoldApp/app-store-assets/screenshots/hold-iphone-65.png",
+            "fileName": "hold-iphone-65.png",
+            "displayType": "APP_IPHONE_65",
+            "fileSize": 94804,
+            "md5": "c58822a2613f2e3f0851c38edbcd85b8"
+          },
+          {
+            "path": "/Users/vishaljain/xcode_projects/HoldApp/app-store-assets/screenshots/hold-ipad-129.png",
+            "fileName": "hold-ipad-129.png",
+            "displayType": "APP_IPAD_PRO_3GEN_129",
+            "fileSize": 105090,
+            "md5": "44c54e376df867800b40ed8e5b76fc2b"
+          }
+        ],
+        "appIcon": [
+          {
+            "path": "/Users/vishaljain/xcode_projects/HoldApp/HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon~ios-marketing.png",
+            "fileName": "AppIcon~ios-marketing.png",
+            "fileSize": 29519,
+            "md5": "bda38af67e0bea4e071c409a39898dcd"
+          }
+        ]
+      },
+      "liveVersions": [
+        {
+          "id": "6ccfefb5-a49f-417d-b154-b5fbd11040fd",
+          "versionString": "1.1",
+          "state": "PREPARE_FOR_SUBMISSION",
+          "editable": true,
+          "localizations": [
+            {
+              "id": "da493ffa-9284-4d82-93d0-5b484c3996b5",
+              "locale": "en-GB",
+              "promotionalText": "Keep the task you are holding now visible on iPhone, in StandBy Mode, and beside your main task system.",
+              "screenshotSets": [
+                {
+                  "id": "90e190e3-5f21-4da5-b030-cac6bdf0e6db",
+                  "displayType": "APP_IPHONE_65",
+                  "screenshots": [
+                    {
+                      "id": "fbcd8657-0bb1-43ca-a1d3-89f1aaccec88",
+                      "fileName": "hold-iphone-65.png",
+                      "fileSize": 94804,
+                      "state": "COMPLETE"
+                    }
+                  ]
+                },
+                {
+                  "id": "e0bb3ec4-aad6-4329-9be4-bfbdb50169f0",
+                  "displayType": "APP_IPAD_PRO_3GEN_129",
+                  "screenshots": [
+                    {
+                      "id": "5c1b340f-19e8-49fb-9c7f-36c46baceed9",
+                      "fileName": "hold-ipad-129.png",
+                      "fileSize": 105090,
+                      "state": "COMPLETE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "reviewDetailIds": [
+            "9438a19a-d555-4763-973a-9221ac0f6b91"
+          ]
+        },
+        {
+          "id": "31e15c85-fa32-4c27-8f20-562410142b37",
+          "versionString": "1.0",
+          "state": "READY_FOR_SALE",
+          "editable": false,
+          "localizations": [
+            {
+              "id": "9356b25a-a46e-4d6c-930f-44c01259c42b",
+              "locale": "en-GB",
+              "promotionalText": "Keep the task you are holding now visible on iPhone, in StandBy Mode, and beside your main task system.",
+              "screenshotSets": [
+                {
+                  "id": "16ecd39e-f6f6-400c-a645-b262d4ebf427",
+                  "displayType": "APP_IPHONE_65",
+                  "screenshots": [
+                    {
+                      "id": "15aed38a-4c98-4e86-a1fc-85e41975b302",
+                      "fileName": "hold-iphone-65.png",
+                      "fileSize": 107631,
+                      "state": "COMPLETE"
+                    }
+                  ]
+                },
+                {
+                  "id": "8f59dc73-4a90-49cf-a048-ddb5668d03ac",
+                  "displayType": "APP_IPAD_PRO_3GEN_129",
+                  "screenshots": [
+                    {
+                      "id": "b5f008f6-70e2-49e7-95b9-ea0600678c2c",
+                      "fileName": "hold-ipad-129.png",
+                      "fileSize": 121732,
+                      "state": "COMPLETE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "reviewDetailIds": [
+            "6724dae4-ee90-46fd-aaec-2d31e97d1fcc"
+          ]
+        }
+      ],
+      "plannedActions": [
+        {
+          "action": "use_editable_version",
+          "appStoreVersionId": "6ccfefb5-a49f-417d-b154-b5fbd11040fd",
+          "versionString": "1.1",
+          "state": "PREPARE_FOR_SUBMISSION"
+        },
+        {
+          "action": "patch_version_localization",
+          "localizationId": "da493ffa-9284-4d82-93d0-5b484c3996b5",
+          "locale": "en-GB"
+        },
+        {
+          "action": "patch_review_notes_if_review_detail_exists",
+          "locale": "en-GB"
+        },
+        {
+          "action": "upload_screenshot",
+          "fileName": "hold-iphone-65.png",
+          "displayType": "APP_IPHONE_65",
+          "fileSize": 94804,
+          "md5": "c58822a2613f2e3f0851c38edbcd85b8"
+        },
+        {
+          "action": "upload_screenshot",
+          "fileName": "hold-ipad-129.png",
+          "displayType": "APP_IPAD_PRO_3GEN_129",
+          "fileSize": 105090,
+          "md5": "44c54e376df867800b40ed8e5b76fc2b"
+        }
+      ]
+    },
+    {
+      "platform": "MAC_OS",
+      "listing": {
+        "platform": "MAC_OS",
+        "source": "/Users/vishaljain/xcode_projects/HoldApp/app-store-assets/app-store-connect/macos-listing.md",
+        "fieldLengths": {
+          "name": {
+            "length": 4,
+            "limit": 30
+          },
+          "subtitle": {
+            "length": 25,
+            "limit": 30
+          },
+          "promotional_text": {
+            "length": 104,
+            "limit": 170
+          },
+          "description": {
+            "length": 1131,
+            "limit": 4000
+          },
+          "keywords": {
+            "length": 80,
+            "limit": 100
+          },
+          "whats_new": {
+            "length": 68,
+            "limit": 4000
+          }
+        },
+        "screenshots": [
+          {
+            "path": "/Users/vishaljain/xcode_projects/HoldApp/app-store-assets/screenshots/hold-mac-desktop.png",
+            "fileName": "hold-mac-desktop.png",
+            "displayType": "APP_DESKTOP",
+            "fileSize": 94189,
+            "md5": "0dfce50368f137105d645ff42dd970f7"
+          }
+        ],
+        "appIcon": [
+          {
+            "path": "/Users/vishaljain/xcode_projects/HoldApp/HoldApp/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png",
+            "fileName": "icon_512x512@2x.png",
+            "fileSize": 29519,
+            "md5": "bda38af67e0bea4e071c409a39898dcd"
+          }
+        ]
+      },
+      "liveVersions": [
+        {
+          "id": "dd41569d-5050-4794-a1de-a9876ab098b4",
+          "versionString": "1.1",
+          "state": "PREPARE_FOR_SUBMISSION",
+          "editable": true,
+          "localizations": [
+            {
+              "id": "9405796e-cfe3-447a-aa65-edf380de99f6",
+              "locale": "en-GB",
+              "promotionalText": "Capture the task you are doing now on Mac, then keep it visible on your iPhone as a quiet focus display.",
+              "screenshotSets": [
+                {
+                  "id": "a3e0d4b9-985e-45ae-bdb9-9bf5a4157f9f",
+                  "displayType": "APP_DESKTOP",
+                  "screenshots": [
+                    {
+                      "id": "61f28dbe-6b75-43a3-91e6-fc38fae0a4a6",
+                      "fileName": "hold-mac-desktop.png",
+                      "fileSize": 94189,
+                      "state": "COMPLETE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "reviewDetailIds": [
+            "4d0657c7-843c-47d7-b468-48d520a7c0ea"
+          ]
+        },
+        {
+          "id": "682ae6e0-d9d4-45b0-a354-08cfdffb0272",
+          "versionString": "1.0",
+          "state": "READY_FOR_SALE",
+          "editable": false,
+          "localizations": [
+            {
+              "id": "bf35333b-00ed-4ac8-a8fa-1126cc606122",
+              "locale": "en-GB",
+              "promotionalText": "Capture the task you are doing now on Mac, then keep it visible on your iPhone as a quiet focus display.",
+              "screenshotSets": [
+                {
+                  "id": "55cc5a07-9093-4ad9-a339-d6b8e6f85392",
+                  "displayType": "APP_DESKTOP",
+                  "screenshots": [
+                    {
+                      "id": "32bd8138-f5a8-429c-8eff-e2881112d7a1",
+                      "fileName": "hold-mac-desktop.png",
+                      "fileSize": 109102,
+                      "state": "COMPLETE"
+                    }
+                  ]
+                }
+              ]
+            }
+          ],
+          "reviewDetailIds": [
+            "ccb38cd6-35a4-4b79-859b-007a3323b50f"
+          ]
+        }
+      ],
+      "plannedActions": [
+        {
+          "action": "use_editable_version",
+          "appStoreVersionId": "dd41569d-5050-4794-a1de-a9876ab098b4",
+          "versionString": "1.1",
+          "state": "PREPARE_FOR_SUBMISSION"
+        },
+        {
+          "action": "patch_version_localization",
+          "localizationId": "9405796e-cfe3-447a-aa65-edf380de99f6",
+          "locale": "en-GB"
+        },
+        {
+          "action": "patch_review_notes_if_review_detail_exists",
+          "locale": "en-GB"
+        },
+        {
+          "action": "upload_screenshot",
+          "fileName": "hold-mac-desktop.png",
+          "displayType": "APP_DESKTOP",
+          "fileSize": 94189,
+          "md5": "0dfce50368f137105d645ff42dd970f7"
+        }
+      ]
+    }
+  ]
+}

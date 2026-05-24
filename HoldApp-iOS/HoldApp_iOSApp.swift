@@ -6,9 +6,7 @@
 //
 
 import SwiftUI
-import UserNotifications
 import os
-import CloudKit
 
 private let logger = Logger(subsystem: "com.vishaljain.HoldApp", category: "iOS-AppDelegate")
 
@@ -29,22 +27,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         logger.error("[LAUNCH] App starting")
         print("📱 [AppDelegate] App launched")
 
-        // Request notification permission first
-        requestNotificationPermission(application: application)
-
-        // Check iCloud account status for debugging
-        CKContainer.default().accountStatus { status, error in
-            let statusStr: String
-            switch status {
-            case .available: statusStr = "available"
-            case .noAccount: statusStr = "NO_ACCOUNT"
-            case .restricted: statusStr = "restricted"
-            case .couldNotDetermine: statusStr = "couldNotDetermine"
-            case .temporarilyUnavailable: statusStr = "temporarilyUnavailable"
-            @unknown default: statusStr = "unknown(\(status.rawValue))"
-            }
-            logger.error("[ICLOUD] Account status=\(statusStr) error=\(error?.localizedDescription ?? "none")")
+        // Avoid touching CloudKit in didFinishLaunching; App Review's crash log
+        // trapped inside CloudKit during this launch delegate path.
+        DispatchQueue.main.async { [weak self] in
+            self?.registerForRemoteNotifications(application: application)
         }
+        logger.error("[ICLOUD] CloudKit sync starts after SwiftUI renders")
 
         // Check if launched from notification
         if let notification = launchOptions?[.remoteNotification] {
@@ -54,30 +42,10 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         return true
     }
 
-    func requestNotificationPermission(application: UIApplication) {
-        print("🔔 [AppDelegate] Requesting notification permission...")
-
-        let center = UNUserNotificationCenter.current()
-        center.requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
-            if let error = error {
-                print("❌ [AppDelegate] Permission request error: \(error.localizedDescription)")
-                return
-            }
-
-            if granted {
-                logger.error("[NOTIF] Permission GRANTED")
-                print("✅ [AppDelegate] Notification permission granted")
-                print("📱 [AppDelegate] Registering for remote notifications...")
-
-                // Must register on main thread
-                DispatchQueue.main.async {
-                    application.registerForRemoteNotifications()
-                }
-            } else {
-                logger.error("[NOTIF] Permission DENIED by user")
-                print("⚠️ [AppDelegate] Notification permission denied by user")
-            }
-        }
+    func registerForRemoteNotifications(application: UIApplication) {
+        logger.error("[APNS] Registering for remote notifications")
+        print("📱 [AppDelegate] Registering for silent CloudKit remote notifications...")
+        application.registerForRemoteNotifications()
     }
 
     func application(_ application: UIApplication, didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {

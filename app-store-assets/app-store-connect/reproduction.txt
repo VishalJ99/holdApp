@@ -1,0 +1,48 @@
+Hold App Store Connect handoff reproduction
+
+Source inputs:
+- `ios-listing.md`
+- `macos-listing.md`
+- `../metadata.md`
+- `../screenshots/`
+- `../../HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon~ios-marketing.png`
+- `../../HoldApp/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png`
+
+Local validation command:
+- `ruby scripts/app_store_connect_update.rb --local-check`
+- `ruby scripts/verify_app_store_assets.rb`
+
+Local landing-page preview:
+- `ruby scripts/generate_app_store_preview.rb`
+- Output: `landing-preview.html`
+
+Local release-version alignment:
+- Dry run: `ruby scripts/set_app_release_version.rb --version 1.1`
+- Applied marketing-version command: `ruby scripts/set_app_release_version.rb --version 1.1 --apply`
+- Applied submission build-number command: `ruby scripts/set_app_release_version.rb --version 1.1 --ios-build 9 --macos-build 10 --apply`
+- Result: iOS and macOS app target `MARKETING_VERSION` values are `1.1`; iOS build is `9`, macOS build is `10`.
+
+Applied App Store Connect command:
+- `ruby scripts/app_store_connect_update.rb --key-id NA9CQQGYY9 --issuer-id b448403b-58ff-4d88-a7ea-271ecaec8403 --key-path /Users/vishaljain/.appstoreconnect/private_keys/AuthKey_NA9CQQGYY9.p8 --locale en-GB --prepare-next-version 1.1 --upload-screenshots --apply`
+
+Applied screenshot replacement command:
+- `ruby scripts/app_store_connect_update.rb --key-id NA9CQQGYY9 --issuer-id b448403b-58ff-4d88-a7ea-271ecaec8403 --key-path /Users/vishaljain/.appstoreconnect/private_keys/AuthKey_NA9CQQGYY9.p8 --locale en-GB --prepare-next-version 1.1 --upload-screenshots --replace-screenshots --apply`
+
+Live preflight command for the retained 1.1 report:
+- `ruby scripts/app_store_connect_update.rb --key-id NA9CQQGYY9 --issuer-id b448403b-58ff-4d88-a7ea-271ecaec8403 --key-path /Users/vishaljain/.appstoreconnect/private_keys/AuthKey_NA9CQQGYY9.p8 --locale en-GB --prepare-next-version 1.1 --upload-screenshots --replace-screenshots --write-preflight app-store-assets/app-store-connect/preflight-1.1.json`
+
+Binary archive/upload/submission:
+- Use Xcode 26 explicitly via `/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild`; the selected developer directory may point at an older Xcode that fails App Store Connect upload validation with an outdated iOS SDK.
+- Detailed archive/upload commands and final App Store review submission evidence are recorded in `submission-1.1.md`.
+- Submission command: `ruby scripts/app_store_release_submit.rb --key-id NA9CQQGYY9 --issuer-id b448403b-58ff-4d88-a7ea-271ecaec8403 --key-path /Users/vishaljain/.appstoreconnect/private_keys/AuthKey_NA9CQQGYY9.p8 --wait-minutes 1 --apply`
+
+Output:
+- `preflight-1.1.json` records current live App Store Connect state and the repeatable plan for iOS/macOS 1.1, en-GB localizations, metadata/review-note patches, and staged screenshot uploads.
+- The report also records local Xcode marketing/build versions and warns when the proposed App Store version does not match local `MARKETING_VERSION`.
+
+Notes:
+- The preflight command above does not mutate App Store Connect because it does not pass `--apply`.
+- The App Store Connect private key is stored outside the repository under `/Users/vishaljain/.appstoreconnect/private_keys/`.
+- User confirmed `1.1` as the target version string before the local project version was updated.
+- The retained `preflight-1.1.json` has no local marketing-version mismatch warnings after the `1.1` project update.
+- App Store Connect initially copied old screenshots into the new editable `1.1` records. The second applied command deleted those inherited editable-version screenshot records and uploaded the branded files; live verification showed iPhone `94804` bytes, iPad `105090` bytes, and Mac `94189` bytes, all `COMPLETE`.

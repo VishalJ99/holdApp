@@ -4,21 +4,30 @@ import os
 
 private let logger = Logger(subsystem: "com.vishaljain.HoldApp", category: "CloudKitManager")
 
+struct MacPresenceStatus {
+    let lastSeenAt: Date?
+    let isFresh: Bool
+}
+
 class CloudKitManager {
     static let shared = CloudKitManager()
+    private static let requiredContainerIdentifier = "iCloud.com.vishaljain.HoldApp"
+    static let macPresenceFreshnessInterval: TimeInterval = 5 * 60
 
     private let container: CKContainer
     private let database: CKDatabase
     private var heartbeatTimer: Timer?
+    private var macPresenceTimer: Timer?
 
     private init() {
-        container = CKContainer.default()
-        database = container.privateCloudDatabase
+        let configuredContainer = CKContainer(identifier: Self.requiredContainerIdentifier)
+        container = configuredContainer
+        database = configuredContainer.privateCloudDatabase
 
         // Log CloudKit configuration
-        logger.error("[INIT] Container=\(self.container.containerIdentifier ?? "nil")")
+        logger.error("[INIT] Container=\(configuredContainer.containerIdentifier ?? "nil")")
         print("☁️ [CloudKit] Initialized")
-        print("📦 [CloudKit] Container: \(container.containerIdentifier ?? "unknown")")
+        print("📦 [CloudKit] Container: \(configuredContainer.containerIdentifier ?? "unknown")")
         print("🌍 [CloudKit] Database: Private")
 
         // Detect environment from entitlements (production vs development)
@@ -40,8 +49,13 @@ class CloudKitManager {
         heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 15, repeats: true) { [weak self] _ in
             self?.heartbeat()
         }
+        macPresenceTimer?.invalidate()
+        macPresenceTimer = Timer.scheduledTimer(withTimeInterval: 60, repeats: true) { [weak self] _ in
+            self?.publishMacPresence { _ in }
+        }
         // Fire immediately to warm up connection
         heartbeat()
+        publishMacPresence { _ in }
         logger.error("[HEARTBEAT] Started 15s timer")
         print("💓 [CloudKit] Heartbeat started (15s interval)")
     }
@@ -50,7 +64,7 @@ class CloudKitManager {
     private func heartbeat() {
         let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
         database.fetch(withRecordID: pointerID) { record, error in
-            if let record = record {
+            if record != nil {
                 logger.error("[HEARTBEAT] OK - record exists")
             } else if let ckError = error as? CKError, ckError.code == .unknownItem {
                 logger.error("[HEARTBEAT] MISSING - pointer record does not exist")
@@ -66,7 +80,55 @@ class CloudKitManager {
     func stopHeartbeat() {
         heartbeatTimer?.invalidate()
         heartbeatTimer = nil
+        macPresenceTimer?.invalidate()
+        macPresenceTimer = nil
         print("💔 [CloudKit] Heartbeat stopped")
+    }
+
+    // MARK: - MacPresence Operations
+
+    func publishMacPresence(completion: @escaping (Error?) -> Void) {
+        let presenceID = CKRecord.ID(recordName: "MAC_PRESENCE")
+        let record = CKRecord(recordType: "MacPresence", recordID: presenceID)
+        record["lastSeenAt"] = Date() as CKRecordValue
+        record["platform"] = "macOS" as CKRecordValue
+        record["appVersion"] = (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "unknown") as CKRecordValue
+        record["buildNumber"] = (Bundle.main.infoDictionary?["CFBundleVersion"] as? String ?? "unknown") as CKRecordValue
+
+        let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+        operation.savePolicy = .allKeys
+        operation.qualityOfService = .utility
+        operation.modifyRecordsResultBlock = { result in
+            switch result {
+            case .success:
+                logger.error("[MAC_PRESENCE] OK - heartbeat saved")
+                completion(nil)
+            case .failure(let error):
+                logger.error("[MAC_PRESENCE] ERROR - \(error.localizedDescription, privacy: .public)")
+                completion(error)
+            }
+        }
+
+        database.add(operation)
+    }
+
+    func fetchMacPresence(completion: @escaping (Result<MacPresenceStatus, Error>) -> Void) {
+        let presenceID = CKRecord.ID(recordName: "MAC_PRESENCE")
+        database.fetch(withRecordID: presenceID) { record, error in
+            if let record = record {
+                let lastSeenAt = record["lastSeenAt"] as? Date
+                let age = lastSeenAt.map { Date().timeIntervalSince($0) }
+                let isFresh = age.map { $0 <= Self.macPresenceFreshnessInterval } ?? false
+                logger.error("[MAC_PRESENCE] FETCH OK - fresh=\(isFresh)")
+                completion(.success(MacPresenceStatus(lastSeenAt: lastSeenAt, isFresh: isFresh)))
+            } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
+                logger.error("[MAC_PRESENCE] FETCH MISSING")
+                completion(.success(MacPresenceStatus(lastSeenAt: nil, isFresh: false)))
+            } else {
+                logger.error("[MAC_PRESENCE] FETCH ERROR - \(error?.localizedDescription ?? "unknown", privacy: .public)")
+                completion(.failure(error ?? NSError(domain: "CloudKitManager", code: -1, userInfo: nil)))
+            }
+        }
     }
 
     // MARK: - CurrentTaskPointer Operations (iPhone Sync)
@@ -158,6 +220,7 @@ class CloudKitManager {
         showEllipsis: Bool,
         siblingPosition: Int?,
         siblingCount: Int?,
+        sourcePlatform: String = "macOS",
         completion: @escaping (Error?) -> Void
     ) {
         logger.error("[SAVE] updateCurrentTaskPointer called")
@@ -180,6 +243,7 @@ class CloudKitManager {
         record["showEllipsis"] = (showEllipsis ? 1 : 0) as CKRecordValue
         record["siblingPosition"] = siblingPosition as CKRecordValue?
         record["siblingCount"] = siblingCount as CKRecordValue?
+        record["sourcePlatform"] = sourcePlatform as CKRecordValue
         record["timestamp"] = Date() as CKRecordValue
 
         // Use CKModifyRecordsOperation with .allKeys to skip fetch and overwrite directly
@@ -258,6 +322,7 @@ class CloudKitManager {
         let subscription = CKQuerySubscription(
             recordType: "CurrentTaskPointer",
             predicate: NSPredicate(value: true),
+            subscriptionID: "current-task-pointer-changes",
             options: [.firesOnRecordCreation, .firesOnRecordUpdate]
         )
 

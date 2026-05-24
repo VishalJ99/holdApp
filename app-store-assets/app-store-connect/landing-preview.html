@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Hold App Store Page Preview</title>
+  <style>
+    :root {
+      --ink: #1f2937;
+      --brand: #1f2747;
+      --paper: #ffffff;
+      --muted: #667085;
+      --line: #d8dde8;
+      --soft: #f5f7fb;
+      --ok: #2c7a54;
+      --warn: #b54708;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: #f7f8fb;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      line-height: 1.45;
+    }
+
+    button, input, textarea { font: inherit; }
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.94);
+      backdrop-filter: blur(18px);
+    }
+
+    .topbar-inner {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .title-group {
+      min-width: 0;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .source-line {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .segmented {
+      display: inline-grid;
+      grid-template-columns: 1fr 1fr;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--soft);
+      padding: 3px;
+      min-width: 220px;
+    }
+
+    .segmented button {
+      border: 0;
+      border-radius: 6px;
+      color: var(--muted);
+      background: transparent;
+      min-height: 34px;
+      padding: 0 14px;
+      cursor: pointer;
+    }
+
+    .segmented button[aria-selected="true"] {
+      color: var(--ink);
+      background: var(--paper);
+      box-shadow: 0 1px 3px rgba(31, 41, 55, 0.14);
+    }
+
+    main {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 22px 20px 44px;
+    }
+
+    .layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 22px;
+      align-items: start;
+    }
+
+    .preview-shell {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    .store-nav {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      padding: 14px 24px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .store-nav strong {
+      color: var(--ink);
+      font-size: 15px;
+    }
+
+    .product-head {
+      padding: 28px 24px 22px;
+      display: grid;
+      grid-template-columns: 118px minmax(0, 1fr) auto;
+      gap: 22px;
+      align-items: center;
+    }
+
+    .app-icon {
+      width: 118px;
+      height: 118px;
+      border-radius: 22px;
+      border: 1px solid rgba(31, 41, 55, 0.12);
+      overflow: hidden;
+      background: var(--brand);
+    }
+
+    .app-icon img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .product-copy h2 {
+      margin: 0;
+      font-size: 34px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 18px;
+      margin-top: 2px;
+    }
+
+    .meta-row {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      background: var(--soft);
+      padding: 4px 10px;
+      font-size: 12px;
+      white-space: nowrap;
+    }
+
+    .get-button {
+      align-self: end;
+      border: 0;
+      border-radius: 999px;
+      color: white;
+      background: var(--accent, #2f63e7);
+      font-weight: 700;
+      min-width: 76px;
+      height: 34px;
+      padding: 0 18px;
+    }
+
+    .section {
+      padding: 22px 24px;
+      border-top: 1px solid var(--line);
+    }
+
+    .section h3 {
+      margin: 0 0 12px;
+      font-size: 21px;
+      letter-spacing: 0;
+    }
+
+    .promo {
+      font-size: 18px;
+      color: var(--ink);
+      margin: 0;
+      max-width: 760px;
+    }
+
+    .screenshots {
+      display: grid;
+      grid-auto-flow: column;
+      grid-auto-columns: minmax(230px, 320px);
+      gap: 16px;
+      overflow-x: auto;
+      padding-bottom: 6px;
+      overscroll-behavior-inline: contain;
+    }
+
+    .shot {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #101828;
+      overflow: hidden;
+      min-height: 220px;
+    }
+
+    .shot img {
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+      display: block;
+      background: #101828;
+    }
+
+    .macos .screenshots {
+      grid-auto-columns: minmax(480px, 760px);
+    }
+
+    .description {
+      display: grid;
+      gap: 14px;
+      max-width: 820px;
+    }
+
+    .description p {
+      margin: 0;
+    }
+
+    .feature-list {
+      margin: 4px 0 0;
+      padding-left: 20px;
+      display: grid;
+      gap: 6px;
+    }
+
+    .sidebar {
+      display: grid;
+      gap: 14px;
+    }
+
+    .panel {
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+    }
+
+    .panel h3 {
+      margin: 0 0 12px;
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .metrics {
+      display: grid;
+      gap: 10px;
+    }
+
+    .metric {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .bar {
+      grid-column: 1 / -1;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--soft);
+      overflow: hidden;
+    }
+
+    .bar span {
+      display: block;
+      height: 100%;
+      width: var(--fill, 0%);
+      background: var(--metric-color, var(--ok));
+    }
+
+    .field-view {
+      width: 100%;
+      min-height: 118px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      color: var(--ink);
+      background: var(--soft);
+      font-size: 13px;
+    }
+
+    .field-select {
+      width: 100%;
+      margin-bottom: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      min-height: 36px;
+      padding: 0 10px;
+      color: var(--ink);
+      background: var(--paper);
+    }
+
+    .small {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    @media (max-width: 900px) {
+      .topbar-inner {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .segmented {
+        width: 100%;
+      }
+
+      .layout {
+        grid-template-columns: 1fr;
+      }
+
+      .product-head {
+        grid-template-columns: 86px minmax(0, 1fr);
+      }
+
+      .app-icon {
+        width: 86px;
+        height: 86px;
+        border-radius: 18px;
+      }
+
+      .product-copy h2 {
+        font-size: 28px;
+      }
+
+      .get-button {
+        grid-column: 1 / -1;
+        justify-self: start;
+      }
+
+      .macos .screenshots,
+      .screenshots {
+        grid-auto-columns: minmax(236px, 82vw);
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="title-group">
+        <h1>Hold App Store Page Preview</h1>
+        <div class="source-line" id="sourceLine"></div>
+      </div>
+      <div class="segmented" role="tablist" aria-label="Platform">
+        <button type="button" data-platform="ios" aria-selected="true">iOS</button>
+        <button type="button" data-platform="macos" aria-selected="false">macOS</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="layout">
+      <section id="preview" class="preview-shell ios" aria-live="polite"></section>
+      <aside class="sidebar">
+        <section class="panel">
+          <h3>Field Lengths</h3>
+          <div id="metrics" class="metrics"></div>
+        </section>
+        <section class="panel">
+          <h3>Copy Scratchpad</h3>
+          <select id="fieldSelect" class="field-select" aria-label="Copy field"></select>
+          <textarea id="fieldView" class="field-view" spellcheck="true"></textarea>
+          <p class="small">Edit here for quick copy experiments. Source markdown is unchanged until you update the listing file.</p>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <script>
+    const DATA = {
+  "platforms": {
+    "ios": {
+      "key": "ios",
+      "label": "iOS",
+      "accent": "#2f63e7",
+      "source": "app-store-assets/app-store-connect/ios-listing.md",
+      "fields": {
+        "name": "Hold",
+        "category": "PRODUCTIVITY",
+        "support_url": "https://github.com/VishalJ99/holdApp/blob/main/SUPPORT.md",
+        "privacy_policy_url": "https://github.com/VishalJ99/holdApp/blob/main/PRIVACY.md",
+        "copyright": "Vishal Jain",
+        "subtitle": "One task, always in sight",
+        "promotional_text": "Keep the task you are holding now visible on iPhone, in StandBy Mode, and beside your main task system.",
+        "description": "Hold gives your current task a calm, dedicated place to live. Open it on iPhone, write what you are holding, and keep that single objective visible while you work.\n\nIt is intentionally not a full task manager. No inbox grooming, no project database, no stream of reminders. Hold is a small working-memory surface for the thing you are doing now.\n\nOn iPhone, Hold works on its own as a spare focus display for one current task. With the Mac app, it becomes a keyboard-first desktop-to-phone workflow: capture the current task quickly on Mac, break it into child tasks or sibling tasks when needed, and keep the active objective visible on iPhone or in StandBy Mode.\n\nFeatures:\n- One clear current-task display\n- Standalone iPhone entry for the task you are holding now\n- StandBy-friendly desk display\n- Fast Mac capture and task switching when paired\n- Lightweight parent, child, and sibling task context on Mac\n- iCloud sync through your own Apple account\n- No ads, tracking, or third-party analytics\n\nUse Hold alongside Things, Todoist, Notion, Obsidian, Reminders, or paper. Your main system stays where it is. Hold just keeps the current thread in view.",
+        "keywords": "focus,task,adhd,todo,productivity,standby,reminder,workflow,goals,notes,whiteboard",
+        "whats_new": "Initial App Store release with refreshed Hold branding and icon.",
+        "review_notes": "The iOS app works standalone. If no fresh Mac heartbeat is available through the user's private iCloud container, onboarding leads to a single current-task entry field. When the Mac app is running on the same iCloud account, iOS mirrors the current task pointer and refreshes through CloudKit notifications. No reviewer account is required."
+      },
+      "intro": "Hold gives your current task a calm, dedicated place to live. Open it on iPhone, write what you are holding, and keep that single objective visible while you work.",
+      "descriptionParagraphs": [
+        "Hold gives your current task a calm, dedicated place to live. Open it on iPhone, write what you are holding, and keep that single objective visible while you work.",
+        "It is intentionally not a full task manager. No inbox grooming, no project database, no stream of reminders. Hold is a small working-memory surface for the thing you are doing now.",
+        "On iPhone, Hold works on its own as a spare focus display for one current task. With the Mac app, it becomes a keyboard-first desktop-to-phone workflow: capture the current task quickly on Mac, break it into child tasks or sibling tasks when needed, and keep the active objective visible on iPhone or in StandBy Mode.",
+        "Features:\n- One clear current-task display\n- Standalone iPhone entry for the task you are holding now\n- StandBy-friendly desk display\n- Fast Mac capture and task switching when paired\n- Lightweight parent, child, and sibling task context on Mac\n- iCloud sync through your own Apple account\n- No ads, tracking, or third-party analytics",
+        "Use Hold alongside Things, Todoist, Notion, Obsidian, Reminders, or paper. Your main system stays where it is. Hold just keeps the current thread in view."
+      ],
+      "features": [
+        "One clear current-task display",
+        "Standalone iPhone entry for the task you are holding now",
+        "StandBy-friendly desk display",
+        "Fast Mac capture and task switching when paired",
+        "Lightweight parent, child, and sibling task context on Mac",
+        "iCloud sync through your own Apple account",
+        "No ads, tracking, or third-party analytics"
+      ],
+      "screenshots": [
+        "../screenshots/hold-iphone-65.png",
+        "../screenshots/hold-ipad-129.png"
+      ],
+      "appIcon": "../../HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon~ios-marketing.png",
+      "limits": {
+        "name": {
+          "length": 4,
+          "limit": 30
+        },
+        "subtitle": {
+          "length": 25,
+          "limit": 30
+        },
+        "promotional_text": {
+          "length": 103,
+          "limit": 170
+        },
+        "description": {
+          "length": 1156,
+          "limit": 4000
+        },
+        "keywords": {
+          "length": 82,
+          "limit": 100
+        },
+        "whats_new": {
+          "length": 64,
+          "limit": 4000
+        }
+      }
+    },
+    "macos": {
+      "key": "macos",
+      "label": "macOS",
+      "accent": "#2c7a54",
+      "source": "app-store-assets/app-store-connect/macos-listing.md",
+      "fields": {
+        "name": "Hold",
+        "category": "PRODUCTIVITY",
+        "support_url": "https://github.com/VishalJ99/holdApp/blob/main/SUPPORT.md",
+        "privacy_policy_url": "https://github.com/VishalJ99/holdApp/blob/main/PRIVACY.md",
+        "copyright": "Vishal Jain",
+        "subtitle": "Keyboard-first task focus",
+        "promotional_text": "Capture the task you are doing now on Mac, then keep it visible on your iPhone as a quiet focus display.",
+        "description": "Hold is a fast, minimalist task anchor for Mac. Capture the task you are working on, switch context without opening a full task manager, and push that current objective to your iPhone as a quiet desk display.\n\nHold is for the moment between planning and doing. It does not replace your project system; it keeps the current thread visible enough that you can return to it after interruptions.\n\nThe Mac app gives you the keyboard-first workflow: quick capture, parent and child task structure, sibling tasks, multiple roots, menu bar access, and iCloud sync to iPhone. Use it when your main task app is too heavy for the question, \"what am I doing right now?\"\n\nFeatures:\n- Fast keyboard-first current-task capture\n- Lightweight hierarchy for parent, child, and sibling tasks\n- Quick switching between active roots\n- Menu bar access on Mac\n- iPhone companion display for the current objective\n- Private iCloud sync through your Apple account\n- No ads, tracking, or third-party analytics\n\nHold works with your existing tools. Keep planning in your system of choice; use Hold as the black-screen whiteboard for the next concrete action.",
+        "keywords": "focus,task,productivity,menubar,hotkey,todo,workflow,goals,notes,adhd,whiteboard",
+        "whats_new": "Initial Mac App Store release with refreshed Hold branding and icon.",
+        "review_notes": "Hold is a menu-bar utility app with a Spotlight-style capture window. It stores the user's task tree locally and syncs only the current task pointer through the user's private CloudKit database for the iPhone companion display. The iPhone app is useful standalone, and the Mac app is the faster companion for keyboard capture and task hierarchy."
+      },
+      "intro": "Hold is a fast, minimalist task anchor for Mac. Capture the task you are working on, switch context without opening a full task manager, and push that current objective to your iPhone as a quiet desk display.",
+      "descriptionParagraphs": [
+        "Hold is a fast, minimalist task anchor for Mac. Capture the task you are working on, switch context without opening a full task manager, and push that current objective to your iPhone as a quiet desk display.",
+        "Hold is for the moment between planning and doing. It does not replace your project system; it keeps the current thread visible enough that you can return to it after interruptions.",
+        "The Mac app gives you the keyboard-first workflow: quick capture, parent and child task structure, sibling tasks, multiple roots, menu bar access, and iCloud sync to iPhone. Use it when your main task app is too heavy for the question, \"what am I doing right now?\"",
+        "Features:\n- Fast keyboard-first current-task capture\n- Lightweight hierarchy for parent, child, and sibling tasks\n- Quick switching between active roots\n- Menu bar access on Mac\n- iPhone companion display for the current objective\n- Private iCloud sync through your Apple account\n- No ads, tracking, or third-party analytics",
+        "Hold works with your existing tools. Keep planning in your system of choice; use Hold as the black-screen whiteboard for the next concrete action."
+      ],
+      "features": [
+        "Fast keyboard-first current-task capture",
+        "Lightweight hierarchy for parent, child, and sibling tasks",
+        "Quick switching between active roots",
+        "Menu bar access on Mac",
+        "iPhone companion display for the current objective",
+        "Private iCloud sync through your Apple account",
+        "No ads, tracking, or third-party analytics"
+      ],
+      "screenshots": [
+        "../screenshots/hold-mac-desktop.png"
+      ],
+      "appIcon": "../../HoldApp/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png",
+      "limits": {
+        "name": {
+          "length": 4,
+          "limit": 30
+        },
+        "subtitle": {
+          "length": 25,
+          "limit": 30
+        },
+        "promotional_text": {
+          "length": 104,
+          "limit": 170
+        },
+        "description": {
+          "length": 1131,
+          "limit": 4000
+        },
+        "keywords": {
+          "length": 80,
+          "limit": 100
+        },
+        "whats_new": {
+          "length": 68,
+          "limit": 4000
+        }
+      }
+    }
+  }
+};
+    const FIELD_LABELS = {
+      name: "App name",
+      subtitle: "Subtitle",
+      promotional_text: "Promotional text",
+      description: "Description",
+      keywords: "Keywords",
+      whats_new: "What's new"
+    };
+
+    let active = "ios";
+
+    function escapeHtml(value) {
+      return String(value || "").replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#39;"
+      })[char]);
+    }
+
+    function setPlatform(key) {
+      active = key;
+      if (location.hash.replace("#", "") !== key) {
+        history.replaceState(null, "", `#${key}`);
+      }
+      document.querySelectorAll("[data-platform]").forEach((button) => {
+        button.setAttribute("aria-selected", String(button.dataset.platform === key));
+      });
+      render();
+    }
+
+    function renderScreenshots(item) {
+      return item.screenshots.map((src, index) => `
+        <figure class="shot">
+          <img src="${escapeHtml(src)}" alt="${escapeHtml(item.label)} screenshot ${index + 1}">
+        </figure>
+      `).join("");
+    }
+
+    function renderDescription(item) {
+      const intro = item.descriptionParagraphs.filter((paragraph) => !paragraph.includes("\n- ")).map((paragraph) => {
+        if (paragraph.startsWith("Features:")) return "";
+        if (paragraph.startsWith("- ")) return "";
+        return `<p>${escapeHtml(paragraph)}</p>`;
+      }).join("");
+      const features = item.features.length ? `
+        <ul class="feature-list">
+          ${item.features.map((feature) => `<li>${escapeHtml(feature)}</li>`).join("")}
+        </ul>
+      ` : "";
+      return `${intro}${features}`;
+    }
+
+    function renderPreview(item) {
+      const fields = item.fields;
+      document.documentElement.style.setProperty("--accent", item.accent);
+      document.getElementById("sourceLine").textContent = `Source: ${item.source}`;
+      const preview = document.getElementById("preview");
+      preview.className = `preview-shell ${item.key}`;
+      preview.innerHTML = `
+        <div class="store-nav">
+          <strong>App Store</strong>
+          <span>Today</span>
+          <span>Apps</span>
+          <span>${escapeHtml(fields.category || "Productivity")}</span>
+        </div>
+        <div class="product-head">
+          <div class="app-icon"><img src="${escapeHtml(item.appIcon)}" alt="Hold app icon"></div>
+          <div class="product-copy">
+            <h2>${escapeHtml(fields.name)}</h2>
+            <div class="subtitle">${escapeHtml(fields.subtitle)}</div>
+            <div class="meta-row">
+              <span class="pill">${escapeHtml(item.label)}</span>
+              <span class="pill">${escapeHtml(fields.category || "PRODUCTIVITY")}</span>
+              <span class="pill">Version 1.1 preview</span>
+            </div>
+          </div>
+          <button class="get-button" type="button">GET</button>
+        </div>
+        <section class="section">
+          <h3>What's New</h3>
+          <p class="promo">${escapeHtml(fields.whats_new)}</p>
+        </section>
+        <section class="section">
+          <h3>Preview</h3>
+          <div class="screenshots">${renderScreenshots(item)}</div>
+        </section>
+        <section class="section">
+          <h3>Promotional Text</h3>
+          <p class="promo">${escapeHtml(fields.promotional_text)}</p>
+        </section>
+        <section class="section">
+          <h3>Description</h3>
+          <div class="description">${renderDescription(item)}</div>
+        </section>
+      `;
+    }
+
+    function renderMetrics(item) {
+      const metrics = document.getElementById("metrics");
+      metrics.innerHTML = Object.entries(item.limits).map(([key, limit]) => {
+        const percent = Math.min(100, Math.round((limit.length / limit.limit) * 100));
+        const color = percent > 95 ? "var(--warn)" : "var(--ok)";
+        return `
+          <div class="metric">
+            <span>${escapeHtml(FIELD_LABELS[key] || key)}</span>
+            <strong>${limit.length}/${limit.limit}</strong>
+            <div class="bar" style="--fill:${percent}%; --metric-color:${color};"><span></span></div>
+          </div>
+        `;
+      }).join("");
+    }
+
+    function renderScratchpad(item) {
+      const select = document.getElementById("fieldSelect");
+      const textarea = document.getElementById("fieldView");
+      const existing = select.value || "promotional_text";
+      select.innerHTML = Object.entries(FIELD_LABELS).map(([key, label]) => `
+        <option value="${key}">${escapeHtml(label)}</option>
+      `).join("");
+      select.value = item.fields[existing] === undefined ? "promotional_text" : existing;
+      textarea.value = item.fields[select.value] || "";
+    }
+
+    function render() {
+      const item = DATA.platforms[active];
+      renderPreview(item);
+      renderMetrics(item);
+      renderScratchpad(item);
+    }
+
+    document.querySelectorAll("[data-platform]").forEach((button) => {
+      button.addEventListener("click", () => setPlatform(button.dataset.platform));
+    });
+    document.getElementById("fieldSelect").addEventListener("change", (event) => {
+      document.getElementById("fieldView").value = DATA.platforms[active].fields[event.target.value] || "";
+    });
+
+    const initialPlatform = DATA.platforms[location.hash.replace("#", "")] ? location.hash.replace("#", "") : "ios";
+    setPlatform(initialPlatform);
+  </script>
+</body>
+</html>

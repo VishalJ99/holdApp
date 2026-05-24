@@ -1,15 +1,20 @@
 Hold App Store screenshot reproduction
 
 Generated for App Store Connect listing assets on May 7, 2026.
+Brand refresh applied on May 23, 2026.
 
 Source inputs:
 - Repository: https://github.com/VishalJ99/holdApp
 - App vision: design/Vision.md
 - iOS focus display UI: HoldApp-iOS/ContentView.swift
 - macOS app/product UI intent: .claude/SYSTEM_ARCHITECTURE.md
+- Brand tokens and Urbanist font: app-store-assets/branding/DESIGN.md and app-store-assets/branding/source/Urbanist.zip
 
 Generation command:
 - `bash app-store-assets/generate_screenshots.sh`
+
+Validation command:
+- `ruby scripts/verify_app_store_assets.rb`
 
 Outputs:
   - screenshots/hold-iphone-65.png (1242x2688)
@@ -19,4 +24,6 @@ Outputs:
 Notes:
 - Screenshots are generated marketing screenshots that represent the app's actual one-task display and Mac quick-capture workflow.
 - They are intentionally minimal and use real product copy from design/Vision.md.
+- The May 23 refresh uses the Hold brand primary color `#1F2747` and Urbanist typography from the synced branding package.
+- The May 23 refresh flattens screenshots to 8-bit sRGB PNGs with no alpha channel for App Store Connect upload compatibility.
 - No user task data was used.
