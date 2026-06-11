@@ -36,6 +36,11 @@ Binary archive/upload/submission:
 - Detailed archive/upload commands and final App Store review submission evidence are recorded in `submission-1.1.md`.
 - Submission command: `ruby scripts/app_store_release_submit.rb --key-id NA9CQQGYY9 --issuer-id b448403b-58ff-4d88-a7ea-271ecaec8403 --key-path /Users/vishaljain/.appstoreconnect/private_keys/AuthKey_NA9CQQGYY9.p8 --wait-minutes 1 --apply`
 
+macOS-only 1.2 update:
+- Detailed metadata prep, archive/upload commands, keychain unlock handling, and final App Store review submission evidence are recorded in `submission-1.2-macos.md`.
+- The macOS target was bumped to `MARKETING_VERSION=1.2` and `CURRENT_PROJECT_VERSION=11` while the iOS target remained `1.1 (9)`.
+- For future Hold uploads/submissions, use the local Codex skill `/Users/vishaljain/.codex/skills/hold-distribution/SKILL.md`; it unlocks the `fence-ios-signing` keychain from the local pass file without printing the password.
+
 Output:
 - `preflight-1.1.json` records current live App Store Connect state and the repeatable plan for iOS/macOS 1.1, en-GB localizations, metadata/review-note patches, and staged screenshot uploads.
 - The report also records local Xcode marketing/build versions and warns when the proposed App Store version does not match local `MARKETING_VERSION`.
