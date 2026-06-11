@@ -130,6 +130,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         hotkeyManager.registerHotkeys()
 
+        // Show onboarding on first launch before any network-backed startup work.
+        showOnboardingIfNeeded()
+
+#if DEBUG
+        if ProcessInfo.processInfo.environment["HOLD_WELCOME_SMOKE_TEST"] == "1" {
+            logger.error("[SMOKE] HOLD_WELCOME_SMOKE_TEST=1; skipping startup services after onboarding")
+            return
+        }
+#endif
+
         // Start CloudKit heartbeat to keep connection warm (prevents cold start delays)
         logger.error("[STARTUP] Calling CloudKitManager.startHeartbeat()")
         CloudKitManager.shared.startHeartbeat()
@@ -137,9 +147,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Initialize app state by syncing local storage with CloudKit
         logger.error("[STARTUP] Calling initializeAppState()")
         initializeAppState()
-
-        // Show onboarding on first launch
-        showOnboardingIfNeeded()
     }
 
     func applicationWillTerminate(_ aNotification: Notification) {
