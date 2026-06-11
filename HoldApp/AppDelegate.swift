@@ -146,15 +146,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Menu Bar Setup
 
     private func setupMenuBar() {
-        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = statusItem.button {
+            button.title = "Hold"
             // Load custom icon from Assets.xcassets
             if let icon = NSImage(named: "hold_icon") {
-                icon.size = NSSize(width: 44, height: 44)  // Testing full size
+                icon.size = NSSize(width: 18, height: 18)
                 icon.isTemplate = true  // Adapts to light/dark mode
                 button.image = icon
+                button.imagePosition = .imageLeft
             }
+            button.toolTip = "Hold"
         }
 
         // Create menu
@@ -1541,4 +1544,3 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         welcomePanel?.show()
     }
 }
-

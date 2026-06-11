@@ -12,7 +12,9 @@ EXPECTED_FILES = {
   "app-store-assets/screenshots/hold-mac-desktop.png" => { width: 2880, height: 1800, alpha: "no" },
   "HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon~ios-marketing.png" => { width: 1024, height: 1024, alpha: "no" },
   "HoldApp/Assets.xcassets/AppIcon.appiconset/icon_512x512@2x.png" => { width: 1024, height: 1024, alpha: "no" },
-  "HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon.png" => { width: 176, height: 176, alpha: "yes" }
+  "HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon.png" => { width: 18, height: 18, alpha: "yes" },
+  "HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon@2x.png" => { width: 36, height: 36, alpha: "yes" },
+  "HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon@3x.png" => { width: 54, height: 54, alpha: "yes" }
 }.freeze
 
 ICON_SETS = [

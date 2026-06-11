@@ -15,7 +15,7 @@ Derived files:
 - assets/ contains extracted logo/icon files used for review and App Store page preparation.
 - ../../HoldApp/Assets.xcassets/AppIcon.appiconset/ contains regenerated macOS app icon sizes.
 - ../../HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/ contains regenerated iOS app icon sizes.
-- ../../HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon.png contains the regenerated macOS menu-bar template mark.
+- ../../HoldApp/Assets.xcassets/hold_icon.imageset/ contains the regenerated 1x/2x/3x macOS menu-bar template mark.
 
 Regeneration command:
 - `bash app-store-assets/branding/generate_icons.sh`
@@ -29,4 +29,4 @@ Required tools:
 
 Brand choices:
 - App icon source: hold_inverse_avatar.png, flattened against brand primary #1F2747 so iOS marketing icons do not contain alpha.
-- Menu-bar template source: hold_icon_white.png, resized with transparency preserved for NSImage template rendering.
+- Menu-bar template source: hold_icon_white.png, resized to 18-point status-item variants with the dark inner cutout converted to transparent alpha for NSImage template rendering.

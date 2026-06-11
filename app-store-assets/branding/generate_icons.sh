@@ -41,6 +41,13 @@ make_template_icon() {
   local output="$2"
   "$MAGICK" "$MENU_ICON_SOURCE" \
     -resize "${size}x${size}!" \
+    -colorspace Gray \
+    -alpha set \
+    -channel A \
+    -fx 'a*(u>0.5?1:0)' \
+    +channel \
+    -fill black \
+    -colorize 100 \
     -depth 8 \
     -strip \
     "$output"
@@ -79,6 +86,8 @@ make_app_icon 120 "$ROOT/HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon-
 make_app_icon 180 "$ROOT/HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon-60@3x~car.png"
 make_app_icon 1024 "$ROOT/HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/AppIcon~ios-marketing.png"
 
-make_template_icon 176 "$ROOT/HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon.png"
+make_template_icon 18 "$ROOT/HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon.png"
+make_template_icon 36 "$ROOT/HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon@2x.png"
+make_template_icon 54 "$ROOT/HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon@3x.png"
 
 echo "Regenerated Hold app icons from $SOURCE_ZIP"

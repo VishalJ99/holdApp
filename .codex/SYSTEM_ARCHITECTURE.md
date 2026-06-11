@@ -1,13 +1,13 @@
 # Hold System Architecture
 
-Last updated: May 24, 2026
+Last updated: June 11, 2026
 
 ## Project Map
 
 - `HoldApp/` contains the macOS app target. It owns fast task capture, local task storage, hotkeys, menu/window behavior, and CloudKit current-task sync. `HoldApp/CloudKitManager.swift` owns the shared CloudKit container access, current pointer reads/writes, Mac presence heartbeat, and silent notification subscription setup.
 - `HoldApp-iOS/` contains the iOS app target. It displays the current task, listens for CloudKit-driven refreshes, presents a minimalist Mac companion onboarding flow when the Mac heartbeat is absent, and offers a single-field standalone hold entry only when no fresh Mac presence heartbeat is available. `HoldApp-iOS/HoldApp_iOSApp.swift` handles launch and silent remote-notification registration while deferring CloudKit reads to the SwiftUI view lifecycle.
 - `HoldApp.xcodeproj/` contains the Xcode project, schemes, target settings, bundle identifiers, signing settings, and version/build numbers.
-- `HoldApp/Assets.xcassets/AppIcon.appiconset/` contains the generated macOS app icon sizes. `HoldApp/Assets.xcassets/hold_icon.imageset/hold_icon.png` contains the macOS menu-bar template mark.
+- `HoldApp/Assets.xcassets/AppIcon.appiconset/` contains the generated macOS app icon sizes. `HoldApp/Assets.xcassets/hold_icon.imageset/` contains the 18-point 1x/2x/3x macOS menu-bar template mark used beside the visible `Hold` status-item label.
 - `HoldApp-iOS/Assets.xcassets/AppIcon.appiconset/` contains the generated iOS and App Store marketing app icon sizes.
 - `design/Vision.md` contains product positioning and App Store copy source material.
 - `.claude/SYSTEM_ARCHITECTURE.md` contains the older detailed architecture notes for local-first task storage, hotkeys, and selectors.
@@ -49,7 +49,7 @@ Last updated: May 24, 2026
 - App Store binary release submission is handled by `ruby scripts/app_store_release_submit.rb --wait-minutes <n> --apply` after archives have uploaded. The helper uses the non-deprecated review submission API: build attachment on `appStoreVersions`, build export compliance on `builds`, `reviewSubmissions` as the review container, `reviewSubmissionItems` for the app version, and `submitted=true` on the review submission.
 - App Store archives must use `/Applications/Xcode.app/Contents/Developer/usr/bin/xcodebuild` or `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` so uploads are built with the currently required iOS/macOS SDK. The selected developer directory may point at an older Xcode in `~/Downloads`.
 - Hold brand tokens and source package files are tracked in `app-store-assets/branding/`.
-- App icons are regenerated with `bash app-store-assets/branding/generate_icons.sh`, using `hold_inverse_avatar.png` for opaque iOS/macOS AppIcon slots and `hold_icon_white.png` for the macOS menu-bar template image.
+- App icons are regenerated with `bash app-store-assets/branding/generate_icons.sh`, using `hold_inverse_avatar.png` for opaque iOS/macOS AppIcon slots and `hold_icon_white.png` for the macOS menu-bar template image. The generator converts the dark inner Hold cutout to transparent alpha so AppKit template rendering preserves the mark in the menu bar.
 - Public support and privacy URLs use the GitHub-hosted `SUPPORT.md` and `PRIVACY.md` files.
 - Screenshots are generated marketing screenshots representing the real one-task display and Mac capture workflow, with reproduction notes in `app-store-assets/reproduction.txt`.
 - App Store image assets are validated with `ruby scripts/verify_app_store_assets.rb`, which checks required dimensions and alpha-channel expectations for screenshots, marketing icons, and app icon slots.
