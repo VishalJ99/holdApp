@@ -43,6 +43,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Setup menu bar
         setupMenuBar()
 
+#if DEBUG
+        if ProcessInfo.processInfo.environment["HOLD_MENU_BAR_SMOKE_TEST"] == "1" {
+            logger.error("[SMOKE] HOLD_MENU_BAR_SMOKE_TEST=1; skipping startup services")
+            return
+        }
+#endif
+
         // Create Spotlight UI
         spotlightViewController = SpotlightViewController()
         spotlightPanel = SpotlightPanel()

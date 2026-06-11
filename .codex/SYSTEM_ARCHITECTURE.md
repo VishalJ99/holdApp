@@ -32,11 +32,12 @@ Last updated: June 11, 2026
 2. The macOS app writes only the current display pointer to the user's private CloudKit database through `HoldApp/CloudKitManager.swift`.
 3. The macOS app writes a `MacPresence` record named `MAC_PRESENCE` on launch and every 60 seconds while running. The iOS app treats the Mac as present when `lastSeenAt` is less than five minutes old.
 4. The shared CloudKit manager uses the explicit `iCloud.com.vishaljain.HoldApp` container so the iOS companion and macOS app read/write the same private CloudKit pointer.
-5. The iOS app reads the current pointer through `HoldApp/CloudKitManager.swift` shared logic and renders a single current task in `HoldApp-iOS/ContentView.swift`.
-6. If the current pointer is empty and `MacPresence` is missing or stale, `HoldApp-iOS/ContentView.swift` first shows the first-run Mac companion onboarding carousel. The onboarding uses a black background, horizontally arranged step dots, and explains that the Mac app unlocks child tasks, sibling tasks, multiple roots, and keyboard-shortcut capture.
-7. After onboarding is completed or skipped, the same stale/no-Mac path shows one standalone input for "what are you currently holding?" and writes that text back to `CURRENT_TASK_POINTER` with `sourcePlatform = iOS`.
-8. `HoldApp-iOS/HoldApp_iOSApp.swift` avoids CloudKit work in `didFinishLaunching`; CloudKit fetch/subscription setup starts after SwiftUI renders to avoid App Review launch-time CloudKit traps.
-9. CloudKit silent notifications wake the iOS app to refresh the display after the current task changes.
+5. `HoldApp/AppDelegate.swift` creates the menu-bar status item before CloudKit startup. Debug launches with `HOLD_MENU_BAR_SMOKE_TEST=1` return immediately after menu-bar setup so unsigned local builds can verify the compiled status-item icon without touching CloudKit or Keychain.
+6. The iOS app reads the current pointer through `HoldApp/CloudKitManager.swift` shared logic and renders a single current task in `HoldApp-iOS/ContentView.swift`.
+7. If the current pointer is empty and `MacPresence` is missing or stale, `HoldApp-iOS/ContentView.swift` first shows the first-run Mac companion onboarding carousel. The onboarding uses a black background, horizontally arranged step dots, and explains that the Mac app unlocks child tasks, sibling tasks, multiple roots, and keyboard-shortcut capture.
+8. After onboarding is completed or skipped, the same stale/no-Mac path shows one standalone input for "what are you currently holding?" and writes that text back to `CURRENT_TASK_POINTER` with `sourcePlatform = iOS`.
+9. `HoldApp-iOS/HoldApp_iOSApp.swift` avoids CloudKit work in `didFinishLaunching`; CloudKit fetch/subscription setup starts after SwiftUI renders to avoid App Review launch-time CloudKit traps.
+10. CloudKit silent notifications wake the iOS app to refresh the display after the current task changes.
 
 ## App Store Deployment Assets
 
