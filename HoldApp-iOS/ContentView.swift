@@ -31,6 +31,8 @@ struct ContentView: View {
     @State private var isLoading: Bool = true
     @State private var isFetchingCurrentTask: Bool = false
     @State private var pendingFetchTrigger: CurrentTaskFetchTrigger?
+    @State private var isSettingUpCloudKitSubscription: Bool = false
+    @State private var hasSetUpCloudKitSubscription: Bool = false
     @State private var hasMacPointerRecord: Bool = false
     @State private var hasResolvedInitialMacConnectionState: Bool = false
     @State private var isMacConnectedConfirmationVisible: Bool = false
@@ -136,6 +138,9 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             fetchCurrentTask(trigger: .foregroundNotification)
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("CloudKitTaskUpdated"))) { _ in
+            fetchCurrentTask(trigger: .push)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
@@ -287,22 +292,25 @@ struct ContentView: View {
     }
 
     private func setupCloudKitSubscription() {
+        guard !isSettingUpCloudKitSubscription, !hasSetUpCloudKitSubscription else {
+            logger.error("[SUB] setupCloudKitSubscription skipped - already configured")
+            return
+        }
+
+        isSettingUpCloudKitSubscription = true
         logger.error("[SUB] setupCloudKitSubscription called")
 
         CloudKitManager.shared.subscribeToTaskChanges { error in
-            if let error {
-                logger.error("[SUB] failed - \(error.localizedDescription)")
-            } else {
-                logger.error("[SUB] ready")
-            }
-        }
+            DispatchQueue.main.async {
+                self.isSettingUpCloudKitSubscription = false
 
-        NotificationCenter.default.addObserver(
-            forName: NSNotification.Name("CloudKitTaskUpdated"),
-            object: nil,
-            queue: .main
-        ) { _ in
-            fetchCurrentTask(trigger: .push)
+                if let error {
+                    logger.error("[SUB] failed - \(error.localizedDescription)")
+                } else {
+                    self.hasSetUpCloudKitSubscription = true
+                    logger.error("[SUB] ready")
+                }
+            }
         }
     }
 }
