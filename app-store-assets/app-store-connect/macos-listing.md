@@ -47,7 +47,7 @@ Keywords:
 focus,task,productivity,menubar,hotkey,todo,workflow,goals,notes,adhd,whiteboard
 
 What's new:
-Initial Mac App Store release with refreshed Hold branding and icon.
+Fixes iPhone companion sync so the current Mac task is published reliably.
 
 Review notes:
 Hold is a menu-bar utility app with a Spotlight-style capture window. It stores the user's task tree locally and syncs only the current task pointer through the user's private CloudKit database for the iPhone companion display. The iPhone app is useful standalone, and the Mac app is the faster companion for keyboard capture and task hierarchy.
