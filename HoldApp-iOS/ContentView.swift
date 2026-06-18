@@ -6,31 +6,22 @@
 //
 
 import SwiftUI
-import CloudKit
 import os
 
 private let logger = Logger(subsystem: "com.vishaljain.HoldApp", category: "iOS-ContentView")
+private let standalonePlaceholderText = "what are you holding?"
+private let foregroundPointerRefreshInterval: TimeInterval = 3
 
-private let onboardingPages = [
-    OnboardingPage(
-        index: 0,
-        title: "Hold",
-        body: "A home for your current task. A steady anchor in a sea of distraction."
-    ),
-    OnboardingPage(
-        index: 1,
-        title: "Simple on iPhone",
-        body: "Type one thing and keep it visible. Clean, quiet, and always ready."
-    ),
-    OnboardingPage(
-        index: 2,
-        title: "Full on Mac",
-        body: "Install Hold for macOS to create child tasks, sibling tasks, multiple roots, and capture quickly with a keyboard shortcut."
-    )
-]
+private enum CurrentTaskFetchTrigger: String {
+    case appear
+    case foregroundNotification
+    case sceneActive
+    case timer
+    case push
+}
 
 struct ContentView: View {
-    // Hierarchy display state
+    @Environment(\.scenePhase) private var scenePhase
     @State private var rootTask: String?
     @State private var parentTask: String?
     @State private var currentTask: String?
@@ -38,49 +29,51 @@ struct ContentView: View {
     @State private var siblingPosition: Int?
     @State private var siblingTotal: Int?
     @State private var isLoading: Bool = true
-    @State private var macPresenceStatus: MacPresenceStatus?
-    @State private var standaloneTaskText: String = ""
-    @State private var isSavingStandaloneTask: Bool = false
-    @State private var standaloneError: String?
-    @State private var onboardingStep: Int = 0
-    @AppStorage("hasCompletedMacCompanionOnboarding") private var hasCompletedMacCompanionOnboarding: Bool = false
+    @State private var isFetchingCurrentTask: Bool = false
+    @State private var pendingFetchTrigger: CurrentTaskFetchTrigger?
+    @State private var hasMacPointerRecord: Bool = false
+    @State private var hasResolvedInitialMacConnectionState: Bool = false
+    @State private var isMacConnectedConfirmationVisible: Bool = false
+    @State private var macConnectedConfirmationToken = UUID()
+    @State private var isEditingStandaloneTask: Bool = false
+    @State private var standaloneDraftText: String = ""
+    @State private var isConnectionHelpPresented: Bool = false
+    @AppStorage("standaloneHoldText") private var standaloneHoldText: String = ""
+    @AppStorage("hasShownMacConnectionHelpOnboarding") private var hasShownMacConnectionHelpOnboarding: Bool = false
     @FocusState private var isStandaloneInputFocused: Bool
 
-    private var shouldShowStandaloneInput: Bool {
-        !isLoading && currentTask == nil && macPresenceStatus?.isFresh == false
+    private static let appStoreURL = URL(string: "https://apps.apple.com/app/id6755408368")!
+
+    private var trimmedStandaloneHold: String {
+        standaloneHoldText.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var shouldShowOnboarding: Bool {
-        shouldShowStandaloneInput && !hasCompletedMacCompanionOnboarding
+    private var hasStandaloneHold: Bool {
+        !trimmedStandaloneHold.isEmpty
+    }
+
+    private var shouldShowStandaloneEditor: Bool {
+        !hasMacPointerRecord && isEditingStandaloneTask
     }
 
     var body: some View {
-        ZStack {
+        GeometryReader { geometry in
+            let shouldIgnoreKeyboard = geometry.size.height >= geometry.size.width
+
+            content
+                .ignoresKeyboardSafeArea(shouldIgnoreKeyboard)
+        }
+    }
+
+    private var content: some View {
+        ZStack(alignment: .topTrailing) {
             Color.black.ignoresSafeArea()
 
             if isLoading {
                 ProgressView()
                     .tint(.white)
-            } else if shouldShowOnboarding {
-                MacCompanionOnboardingView(
-                    currentStep: $onboardingStep,
-                    onComplete: completeOnboarding
-                )
-            } else if shouldShowStandaloneInput {
-                StandaloneHoldEntryView(
-                    text: $standaloneTaskText,
-                    isSaving: isSavingStandaloneTask,
-                    errorMessage: standaloneError,
-                    isFocused: $isStandaloneInputFocused,
-                    onSubmit: saveStandaloneHold
-                )
-            } else if currentTask == nil {
-                Text("what are you holding?")
-                    .font(.largeTitle)
-                    .foregroundColor(.gray)
-            } else {
-                // Centered hierarchy display with max contrast
-                HierarchyView_MaxContrast(
+            } else if hasMacPointerRecord {
+                ReadOnlyCurrentTaskView(
                     rootTask: rootTask,
                     parentTask: parentTask,
                     currentTask: currentTask,
@@ -88,346 +81,535 @@ struct ContentView: View {
                     siblingPosition: siblingPosition,
                     siblingTotal: siblingTotal
                 )
+            } else if shouldShowStandaloneEditor {
+                StandaloneCursorInputView(
+                    text: $standaloneDraftText,
+                    isFocused: $isStandaloneInputFocused,
+                    onSubmit: commitStandaloneDraft
+                )
+            } else if hasStandaloneHold {
+                StandaloneHoldDisplayView(text: trimmedStandaloneHold) {
+                    beginStandaloneEdit()
+                }
+            } else {
+                StandalonePlaceholderView {
+                    beginStandaloneEdit()
+                }
             }
+
+            if isMacConnectedConfirmationVisible {
+                MacConnectionBadge(
+                    dotColor: .green,
+                    text: "mac connected"
+                )
+                    .padding(.top, 18)
+                    .padding(.trailing, 18)
+            } else if !hasMacPointerRecord {
+                MacConnectionBadge(
+                    dotColor: .red,
+                    text: "mac not connected"
+                ) {
+                    isStandaloneInputFocused = false
+                    isConnectionHelpPresented = true
+                }
+                    .padding(.top, 18)
+                    .padding(.trailing, 18)
+            }
+        }
+        .overlay {
+            if isConnectionHelpPresented {
+                MacConnectionHelpModal(appStoreURL: Self.appStoreURL) {
+                    closeConnectionHelp()
+                }
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard !hasMacPointerRecord, !hasStandaloneHold, !isEditingStandaloneTask, !isConnectionHelpPresented else { return }
+            beginStandaloneEdit()
         }
         .onAppear {
             logger.error("[VIEW] onAppear - starting init")
-            print("📲 [ContentView] View appeared - initializing...")
-
-            // Keep screen on while displaying task (like YouTube)
             UIApplication.shared.isIdleTimerDisabled = true
-            print("📲 [ContentView] Screen auto-lock disabled")
-
             setupCloudKitSubscription()
-            refreshMacPresence()
-            fetchCurrentTask()
+            fetchCurrentTask(trigger: .appear)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
-            refreshMacPresence()
-            fetchCurrentTask()
+            fetchCurrentTask(trigger: .foregroundNotification)
         }
-        .onReceive(Timer.publish(every: 60, on: .main, in: .common).autoconnect()) { _ in
-            refreshMacPresence()
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active {
+                fetchCurrentTask(trigger: .sceneActive)
+            }
         }
-        .persistentSystemOverlays(.hidden) // Hide home indicator
-        .statusBarHidden(true) // Hide status bar for fully immersive black
+        .onReceive(Timer.publish(every: foregroundPointerRefreshInterval, on: .main, in: .common).autoconnect()) { _ in
+            guard scenePhase == .active else { return }
+            fetchCurrentTask(trigger: .timer)
+        }
+        .persistentSystemOverlays(.hidden)
+        .statusBarHidden(true)
     }
 
-    func completeOnboarding() {
-        hasCompletedMacCompanionOnboarding = true
-        isStandaloneInputFocused = true
-    }
+    private func fetchCurrentTask(trigger: CurrentTaskFetchTrigger) {
+        guard !isFetchingCurrentTask else {
+            let shouldQueueRefresh = trigger == .push
+            if shouldQueueRefresh {
+                pendingFetchTrigger = trigger
+            }
+            LatencyDiagnostics.log("fetch skipped trigger=\(trigger.rawValue) queued=\(shouldQueueRefresh) reason=in-flight")
+            return
+        }
 
-    func fetchCurrentTask() {
-        logger.error("[FETCH] fetchCurrentTask called")
-        let fetchRequestTime = Date()
-        print("📲 [ContentView] Fetch requested at \(fetchRequestTime)")
+        isFetchingCurrentTask = true
+        let fetchStartTime = Date()
+        logger.error("[FETCH] fetchCurrentTask called trigger=\(trigger.rawValue, privacy: .public)")
+        LatencyDiagnostics.log("fetch started trigger=\(trigger.rawValue) at=\(fetchStartTime)")
 
-        // Fetch pointer - contains ALL display info in one request
         CloudKitManager.shared.fetchCurrentTask { result in
-            switch result {
-            case .success(let taskData):
-                let totalTime = Date().timeIntervalSince(fetchRequestTime)
-
-                // Extract all fields from pointer (no additional fetches needed!)
-                let currentText = taskData.text
-                let parentText = taskData.parentTaskText
-                let rootText = taskData.rootTaskText
-                let showEllipsis = taskData.showEllipsis
-                let siblingPos = taskData.siblingPosition
-                let siblingCnt = taskData.siblingCount
-
-                // Update UI on main thread
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    self.currentTask = currentText
-                    self.parentTask = parentText
-                    self.rootTask = rootText
-                    self.showEllipsis = showEllipsis
-                    self.siblingPosition = siblingPos
-                    self.siblingTotal = siblingCnt
-
-                    logger.error("[FETCH] SUCCESS - taskId=\(taskData.taskId ?? "nil") text=\(String(describing: currentText?.prefix(30)))")
-                    print("✅ [ContentView] UI updated in \(String(format: "%.2f", totalTime))s")
-                    print("📲 [ContentView] Hierarchy:")
-                    print("   Root: \(rootText ?? "nil")")
-                    print("   Ellipsis: \(showEllipsis ? "YES" : "NO")")
-                    print("   Parent: \(parentText ?? "nil")")
-                    print("   Current: \(currentText ?? "nil")")
-                    print("📊 [ContentView] Leaves (DFS): \(siblingPos?.description ?? "nil")/\(siblingCnt?.description ?? "nil")")
-                }
-
-            case .failure(let error):
-                let totalTime = Date().timeIntervalSince(fetchRequestTime)
-                DispatchQueue.main.async {
-                    self.isLoading = false
-                    logger.error("[FETCH] FAILED - \(error.localizedDescription)")
-                    print("❌ [ContentView] Error fetching task after \(String(format: "%.2f", totalTime))s: \(error)")
-                }
-            }
-        }
-    }
-
-    func refreshMacPresence() {
-        CloudKitManager.shared.fetchMacPresence { result in
             DispatchQueue.main.async {
+                let fetchElapsed = Date().timeIntervalSince(fetchStartTime)
+                self.isFetchingCurrentTask = false
+                self.isLoading = false
+
                 switch result {
-                case .success(let status):
-                    self.macPresenceStatus = status
-                    logger.error("[MAC_PRESENCE] fresh=\(status.isFresh)")
-                    if status.isFresh {
-                        self.standaloneError = nil
-                        self.isStandaloneInputFocused = false
+                case .success(let pointer):
+                    let hadResolvedConnectionState = self.hasResolvedInitialMacConnectionState
+                    let wasMacConnected = self.hasMacPointerRecord
+
+                    self.hasMacPointerRecord = pointer.recordExists
+                    self.currentTask = pointer.text
+                    self.parentTask = pointer.parentTaskText
+                    self.rootTask = pointer.rootTaskText
+                    self.showEllipsis = pointer.showEllipsis
+                    self.siblingPosition = pointer.siblingPosition
+                    self.siblingTotal = pointer.siblingCount
+                    self.hasResolvedInitialMacConnectionState = true
+
+                    if pointer.recordExists {
+                        self.cancelStandaloneEditing()
+                        self.isConnectionHelpPresented = false
+                        if hadResolvedConnectionState && !wasMacConnected {
+                            self.showMacConnectedConfirmation()
+                        }
+                    } else {
+                        self.presentConnectionHelpIfNeeded()
                     }
+
+                    let pointerAge = pointer.timestamp.map { Date().timeIntervalSince($0) }
+                    let pointerAgeText = pointerAge.map { String(format: "%.2f", $0) } ?? "nil"
+                    let fetchElapsedText = String(format: "%.2f", fetchElapsed)
+                    let taskId = pointer.taskId ?? "nil"
+                    let text = pointer.text ?? "nil"
+
+                    logger.error("[FETCH] SUCCESS - recordExists=\(pointer.recordExists) taskId=\(taskId, privacy: .public)")
+                    LatencyDiagnostics.log("trigger=\(trigger.rawValue) fetchElapsed=\(fetchElapsedText)s pointerAge=\(pointerAgeText)s recordExists=\(pointer.recordExists) taskId=\(taskId) text=\"\(text)\"")
+
                 case .failure(let error):
-                    self.macPresenceStatus = MacPresenceStatus(lastSeenAt: nil, isFresh: false)
-                    logger.error("[MAC_PRESENCE] failed - \(error.localizedDescription)")
+                    self.hasMacPointerRecord = false
+                    self.hasResolvedInitialMacConnectionState = true
+                    self.presentConnectionHelpIfNeeded()
+                    logger.error("[FETCH] FAILED - \(error.localizedDescription)")
+                    LatencyDiagnostics.log("trigger=\(trigger.rawValue) fetchElapsed=\(String(format: "%.2f", fetchElapsed))s failed=\"\(error.localizedDescription)\"")
+                }
+
+                if let pendingFetchTrigger = self.pendingFetchTrigger {
+                    self.pendingFetchTrigger = nil
+                    LatencyDiagnostics.log("fetch queued trigger=\(pendingFetchTrigger.rawValue) starting-after=\(trigger.rawValue)")
+                    self.fetchCurrentTask(trigger: pendingFetchTrigger)
                 }
             }
         }
     }
 
-    func saveStandaloneHold() {
-        let trimmedText = standaloneTaskText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedText.isEmpty, !isSavingStandaloneTask else { return }
+    private func beginStandaloneEdit() {
+        guard !hasMacPointerRecord else { return }
+        standaloneDraftText = trimmedStandaloneHold
+        isEditingStandaloneTask = true
 
-        standaloneError = nil
-        isSavingStandaloneTask = true
-        let taskId = "ios-\(UUID().uuidString)"
-
-        CloudKitManager.shared.updateCurrentTaskPointer(
-            taskId: taskId,
-            text: trimmedText,
-            parentId: nil,
-            rootId: nil,
-            parentTaskText: nil,
-            rootTaskText: nil,
-            showEllipsis: false,
-            siblingPosition: nil,
-            siblingCount: nil,
-            sourcePlatform: "iOS"
-        ) { error in
-            DispatchQueue.main.async {
-                self.isSavingStandaloneTask = false
-                if let error = error {
-                    self.standaloneError = "Could not save"
-                    logger.error("[STANDALONE] save failed - \(error.localizedDescription)")
-                    return
-                }
-
-                self.currentTask = trimmedText
-                self.parentTask = nil
-                self.rootTask = nil
-                self.showEllipsis = false
-                self.siblingPosition = nil
-                self.siblingTotal = nil
-                self.standaloneTaskText = ""
-                self.isStandaloneInputFocused = false
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                logger.error("[STANDALONE] iOS hold saved")
-            }
+        DispatchQueue.main.async {
+            isStandaloneInputFocused = true
         }
     }
 
-    func setupCloudKitSubscription() {
+    private func cancelStandaloneEditing() {
+        isEditingStandaloneTask = false
+        standaloneDraftText = ""
+        isStandaloneInputFocused = false
+    }
+
+    private func closeConnectionHelp() {
+        hasShownMacConnectionHelpOnboarding = true
+        isConnectionHelpPresented = false
+    }
+
+    private func presentConnectionHelpIfNeeded() {
+        guard !hasShownMacConnectionHelpOnboarding,
+              !isConnectionHelpPresented,
+              !hasMacPointerRecord else {
+            return
+        }
+
+        isStandaloneInputFocused = false
+        isConnectionHelpPresented = true
+        logger.error("[ONBOARDING] showing Mac connection help")
+    }
+
+    private func showMacConnectedConfirmation() {
+        let token = UUID()
+        macConnectedConfirmationToken = token
+        isMacConnectedConfirmationVisible = true
+        logger.error("[CONNECTION] showing mac connected confirmation")
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+            guard macConnectedConfirmationToken == token else { return }
+            isMacConnectedConfirmationVisible = false
+        }
+    }
+
+    private func commitStandaloneDraft() {
+        guard !hasMacPointerRecord else {
+            cancelStandaloneEditing()
+            return
+        }
+
+        let trimmedText = standaloneDraftText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedText.isEmpty else {
+            standaloneHoldText = ""
+            cancelStandaloneEditing()
+            return
+        }
+
+        standaloneHoldText = trimmedText
+        isEditingStandaloneTask = false
+        isStandaloneInputFocused = false
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        logger.error("[STANDALONE] local hold saved")
+    }
+
+    private func setupCloudKitSubscription() {
         logger.error("[SUB] setupCloudKitSubscription called")
-        print("🔔 [ContentView] Setting up CloudKit subscription and notification observer...")
 
-        // Subscribe to task changes
         CloudKitManager.shared.subscribeToTaskChanges { error in
-            logger.error("[SUB] Result - error=\(error?.localizedDescription ?? "none")")
-            if let error = error {
-                print("❌ [ContentView] Subscription setup failed: \(error)")
+            if let error {
+                logger.error("[SUB] failed - \(error.localizedDescription)")
             } else {
-                print("✅ [ContentView] Subscription setup completed successfully")
+                logger.error("[SUB] ready")
             }
         }
 
-        // Listen for CloudKit notifications
         NotificationCenter.default.addObserver(
             forName: NSNotification.Name("CloudKitTaskUpdated"),
             object: nil,
             queue: .main
-        ) { notification in
-            print("🔔 [ContentView] Received CloudKitTaskUpdated notification!")
-            print("🔔 [ContentView] Notification object: \(String(describing: notification.object))")
-            print("🔔 [ContentView] Triggering fetch...")
-            fetchCurrentTask()
+        ) { _ in
+            fetchCurrentTask(trigger: .push)
         }
-
-        print("✅ [ContentView] NotificationCenter observer registered for CloudKitTaskUpdated")
     }
 }
 
-private struct OnboardingPage: Identifiable {
-    let index: Int
-    let title: String
-    let body: String
-
-    var id: Int { index }
-}
-
-private struct MacCompanionOnboardingView: View {
-    @Binding var currentStep: Int
-    let onComplete: () -> Void
-
-    private var isLastStep: Bool {
-        currentStep == onboardingPages.count - 1
-    }
-
-    var body: some View {
-        VStack(spacing: 0) {
-            Spacer(minLength: 40)
-
-            TabView(selection: $currentStep) {
-                ForEach(onboardingPages) { page in
-                    VStack(spacing: 18) {
-                        Text(page.title)
-                            .font(.largeTitle.weight(.semibold))
-                            .foregroundStyle(.white)
-                            .multilineTextAlignment(.center)
-                            .lineLimit(2)
-                            .minimumScaleFactor(0.78)
-
-                        Text(page.body)
-                            .font(.title3.weight(.regular))
-                            .foregroundStyle(.white.opacity(0.68))
-                            .multilineTextAlignment(.center)
-                            .lineSpacing(4)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .padding(.horizontal, 30)
-                    .tag(page.index)
-                }
-            }
-            .tabViewStyle(.page(indexDisplayMode: .never))
-            .frame(maxHeight: 360)
-
-            OnboardingDots(currentStep: currentStep, count: onboardingPages.count)
-                .padding(.top, 16)
-
-            Spacer(minLength: 40)
-
-            VStack(spacing: 12) {
-                Button(action: primaryAction) {
-                    Text(isLastStep ? "Start holding" : "Continue")
-                        .font(.headline)
-                        .frame(maxWidth: .infinity, minHeight: 52)
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(.white)
-                .foregroundStyle(.black)
-                .accessibilityLabel(isLastStep ? "Start holding" : "Continue onboarding")
-
-                Button(action: onComplete) {
-                    Text("Use iPhone only")
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.white.opacity(0.72))
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Use iPhone only")
-            }
-            .padding(.horizontal, 28)
-            .padding(.bottom, 28)
-        }
-    }
-
-    private func primaryAction() {
-        if isLastStep {
-            onComplete()
+private extension View {
+    @ViewBuilder
+    func ignoresKeyboardSafeArea(_ shouldIgnore: Bool) -> some View {
+        if shouldIgnore {
+            self.ignoresSafeArea(.keyboard)
         } else {
-            withAnimation(.easeInOut(duration: 0.22)) {
-                currentStep += 1
-            }
+            self
         }
     }
 }
 
-private struct OnboardingDots: View {
-    let currentStep: Int
-    let count: Int
+private struct MacConnectionBadge: View {
+    let dotColor: Color
+    let text: String
+    var action: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 8) {
-            ForEach(0..<count, id: \.self) { index in
-                Capsule(style: .continuous)
-                    .fill(index == currentStep ? Color.white : Color.white.opacity(0.28))
-                    .frame(width: index == currentStep ? 24 : 7, height: 7)
+        if let action {
+            Button(action: action) {
+                content
             }
+            .buttonStyle(.plain)
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("Mac not connected. Setup instructions.")
+        } else {
+            content
+                .accessibilityElement(children: .combine)
+                .accessibilityLabel(text)
         }
-        .animation(.easeInOut(duration: 0.2), value: currentStep)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Onboarding step \(currentStep + 1) of \(count)")
+    }
+
+    private var content: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(dotColor)
+                .frame(width: 8, height: 8)
+
+            Text(text)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(.white.opacity(0.72))
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 10)
+        .contentShape(Capsule())
     }
 }
 
-private struct StandaloneHoldEntryView: View {
+private struct StandaloneCursorInputView: View {
     @Binding var text: String
-    let isSaving: Bool
-    let errorMessage: String?
     var isFocused: FocusState<Bool>.Binding
     let onSubmit: () -> Void
 
     var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
+        TextField("", text: $text)
+            .focused(isFocused)
+            .submitLabel(.done)
+            .textInputAutocapitalization(.sentences)
+            .autocorrectionDisabled(false)
+            .multilineTextAlignment(.center)
+            .font(.system(size: 52, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white)
+            .tint(.white.opacity(0.84))
+            .lineLimit(1)
+            .contentShape(Rectangle())
+            .onSubmit(onSubmit)
+            .accessibilityLabel("Current hold")
+            .padding(.horizontal, 36)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
 
-            VStack(spacing: 16) {
-                Text("what are you currently holding?")
-                    .font(.title2.weight(.semibold))
+private struct StandalonePlaceholderView: View {
+    let onEdit: () -> Void
+
+    var body: some View {
+        Text(standalonePlaceholderText)
+            .font(.system(size: 40, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white.opacity(0.26))
+            .multilineTextAlignment(.center)
+            .lineLimit(1)
+            .minimumScaleFactor(0.6)
+            .padding(.horizontal, 36)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onEdit)
+            .accessibilityLabel(standalonePlaceholderText)
+    }
+}
+
+private struct StandaloneHoldDisplayView: View {
+    let text: String
+    let onEdit: () -> Void
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 52, weight: .semibold, design: .rounded))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .lineSpacing(3)
+            .minimumScaleFactor(0.45)
+            .padding(.horizontal, 36)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .onTapGesture(perform: onEdit)
+            .accessibilityLabel(text)
+    }
+}
+
+private struct MacConnectionHelpModal: View {
+    let appStoreURL: URL
+    let onClose: () -> Void
+
+    var body: some View {
+        GeometryReader { geometry in
+            let isCompactHeight = geometry.size.height < 520
+
+            ZStack {
+                Color.black.opacity(0.58)
+                    .ignoresSafeArea()
+                    .contentShape(Rectangle())
+                    .onTapGesture {}
+
+                if isCompactHeight {
+                    compactCard(availableSize: geometry.size)
+                } else {
+                    regularCard
+                }
+            }
+        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .zIndex(10)
+    }
+
+    private var regularCard: some View {
+        VStack(alignment: .leading, spacing: 22) {
+            Text("Connect your Mac")
+                .font(.title2.weight(.semibold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity)
+
+            Text("Hold is designed to capture tasks on your Mac and display them on your phone. Connect your Mac to complete the experience:")
+                .font(.body)
+                .foregroundStyle(.white.opacity(0.68))
+                .fixedSize(horizontal: false, vertical: true)
+
+            setupSteps(spacing: 16)
+
+            shareLink(font: .headline)
+        }
+        .padding(.top, 48)
+        .padding(.horizontal, 24)
+        .padding(.bottom, 24)
+        .frame(maxWidth: 360)
+        .background(cardBackground)
+        .overlay(cardBorder)
+        .overlay(alignment: .topTrailing) {
+            closeButton
+                .padding(14)
+        }
+        .padding(.horizontal, 24)
+        .contentShape(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+    }
+
+    private func compactCard(availableSize: CGSize) -> some View {
+        let horizontalMargin: CGFloat = 24
+        let verticalMargin: CGFloat = 18
+        let maxWidth = min(availableSize.width - horizontalMargin * 2, 560)
+        let maxHeight = max(availableSize.height - verticalMargin * 2, 220)
+
+        return VStack(alignment: .leading, spacing: 12) {
+            ZStack {
+                Text("Connect your Mac")
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.white)
                     .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
 
-                TextField("current task", text: $text, axis: .vertical)
-                    .focused(isFocused)
-                    .submitLabel(.done)
-                    .textInputAutocapitalization(.sentences)
-                    .autocorrectionDisabled(false)
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.white)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 16)
-                    .frame(minHeight: 56)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .fill(Color.white.opacity(0.08))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color.white.opacity(0.18), lineWidth: 1)
-                    )
-                    .onSubmit(onSubmit)
-                    .accessibilityLabel("Current hold")
-
-                if let errorMessage {
-                    Text(errorMessage)
-                        .font(.footnote)
-                        .foregroundStyle(.red)
+                HStack {
+                    Spacer()
+                    closeButton
                 }
             }
+            .frame(height: 34)
 
-            Spacer()
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Hold is designed to capture tasks on your Mac and display them on your phone. Connect your Mac to complete the experience:")
+                        .font(.callout)
+                        .foregroundStyle(.white.opacity(0.68))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.bottom, 18)
 
-            Button(action: onSubmit) {
-                HStack(spacing: 8) {
-                    if isSaving {
-                        ProgressView()
-                            .tint(.black)
-                    }
-                    Text(isSaving ? "Saving" : "Hold")
-                        .font(.headline)
+                    setupSteps(spacing: 20, isCompact: true)
                 }
-                .frame(maxWidth: .infinity, minHeight: 52)
+                .padding(.bottom, 2)
             }
-            .buttonStyle(.borderedProminent)
-            .tint(.white)
-            .foregroundStyle(.black)
-            .disabled(text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isSaving)
-            .accessibilityLabel("Hold current task")
+
+            shareLink(font: .callout.weight(.semibold), maxWidth: 280)
         }
-        .padding(.horizontal, 28)
-        .padding(.bottom, 28)
+        .padding(.top, 14)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 16)
+        .frame(maxWidth: maxWidth, maxHeight: maxHeight)
+        .background(cardBackground)
+        .overlay(cardBorder)
+        .padding(.horizontal, horizontalMargin)
+        .padding(.vertical, verticalMargin)
+        .contentShape(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+        )
+    }
+
+    private func setupSteps(spacing: CGFloat, isCompact: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: spacing) {
+            SetupStep(number: 1, text: "Open this link on your Mac (ensure it's signed into the same iCloud account as this iPhone).", isCompact: isCompact)
+            SetupStep(number: 2, text: "Download Hold.", isCompact: isCompact)
+            SetupStep(number: 3, text: "Enter a new task and watch it show up on your phone!", isCompact: isCompact)
+        }
+    }
+
+    private func shareLink(font: Font, maxWidth: CGFloat? = nil) -> some View {
+        ShareLink(item: appStoreURL) {
+            Text("Share or Copy Link")
+                .font(font)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .frame(maxWidth: maxWidth ?? .infinity)
+        .frame(maxWidth: .infinity)
+    }
+
+    private var closeButton: some View {
+        Button(action: onClose) {
+            Image(systemName: "xmark")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(.white.opacity(0.78))
+                .frame(width: 34, height: 34)
+                .background(Circle().fill(Color.white.opacity(0.10)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Close")
+    }
+
+    private var cardBackground: some View {
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+            .fill(Color(red: 0.08, green: 0.08, blue: 0.09))
+    }
+
+    private var cardBorder: some View {
+        RoundedRectangle(cornerRadius: 28, style: .continuous)
+            .stroke(Color.white.opacity(0.16), lineWidth: 1)
+    }
+}
+
+private struct SetupStep: View {
+    let number: Int
+    let text: String
+    var isCompact: Bool = false
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: isCompact ? 10 : 12) {
+            Text("\(number)")
+                .font((isCompact ? Font.caption2 : Font.caption).weight(.bold))
+                .foregroundStyle(.black)
+                .frame(width: isCompact ? 20 : 22, height: isCompact ? 20 : 22)
+                .background(Circle().fill(Color.white))
+
+            Text(text)
+                .font(isCompact ? .callout : .body)
+                .foregroundStyle(.white.opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct ReadOnlyCurrentTaskView: View {
+    let rootTask: String?
+    let parentTask: String?
+    let currentTask: String?
+    let showEllipsis: Bool
+    let siblingPosition: Int?
+    let siblingTotal: Int?
+
+    var body: some View {
+        if currentTask == nil {
+            Text("what are you holding?")
+                .font(.largeTitle)
+                .foregroundColor(.gray)
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        } else {
+            HierarchyView_MaxContrast(
+                rootTask: rootTask,
+                parentTask: parentTask,
+                currentTask: currentTask,
+                showEllipsis: showEllipsis,
+                siblingPosition: siblingPosition,
+                siblingTotal: siblingTotal
+            )
+        }
     }
 }
 
@@ -446,7 +628,6 @@ struct HierarchyView_MaxContrast: View {
             VStack(spacing: 0) {
                 Spacer().frame(height: 4)
 
-                // ROOT SECTION (only if level 3+)
                 if let root = rootTask {
                     Text(root)
                         .font(.system(size: 15, weight: .regular, design: .rounded))
@@ -454,7 +635,6 @@ struct HierarchyView_MaxContrast: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: true)
 
-                    // ELLIPSIS (only if level 4+)
                     if showEllipsis {
                         Spacer().frame(height: 4)
                         Text("⋯")
@@ -464,10 +644,8 @@ struct HierarchyView_MaxContrast: View {
                     }
 
                     Spacer().frame(height: showEllipsis ? 0 : 10)
-
                 }
 
-                // PARENT SECTION (only if level 2+)
                 if let parent = parentTask {
                     Text(parent)
                         .font(.system(size: 20, weight: .regular, design: .rounded))
@@ -477,7 +655,6 @@ struct HierarchyView_MaxContrast: View {
 
                     Spacer().frame(height: 8)
 
-                    // Arrow after parent
                     Text("↓")
                         .font(.system(size: 18, weight: .regular, design: .rounded))
                         .foregroundColor(.white.opacity(0.65))
@@ -485,7 +662,6 @@ struct HierarchyView_MaxContrast: View {
                     Spacer().frame(height: 4)
                 }
 
-                // CURRENT TASK (always shown if exists)
                 if let current = currentTask {
                     Text(current)
                         .font(.system(size: 40, weight: .semibold, design: .rounded))
@@ -494,7 +670,6 @@ struct HierarchyView_MaxContrast: View {
                         .lineSpacing(2)
                 }
 
-                // LEAF INDICATOR (shows position among all leaves in root, DFS order)
                 if let position = siblingPosition,
                    let total = siblingTotal,
                    total > 1 {

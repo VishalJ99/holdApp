@@ -24,11 +24,29 @@ final class HoldApp_iOSUITests: XCTestCase {
 
     @MainActor
     func testExample() throws {
-        // UI tests must launch the application that they test.
+        let app = XCUIApplication()
+        app.launch()
+    }
+
+    @MainActor
+    func testFirstRunMacConnectionHelp() throws {
         let app = XCUIApplication()
         app.launch()
 
-        // Use XCTAssert and related functions to verify your tests produce the correct results.
+        XCTAssertTrue(app.staticTexts["Connect your Mac"].waitForExistence(timeout: 8))
+        XCTAssertTrue(app.staticTexts["Hold is designed to capture tasks on your Mac and display them on your phone. Connect your Mac to complete the experience:"].exists)
+        XCTAssertTrue(app.staticTexts["Open this link on your Mac (ensure it's signed into the same iCloud account as this iPhone)."].exists)
+        XCTAssertTrue(app.staticTexts["Download Hold."].exists)
+        XCTAssertTrue(app.staticTexts["Enter a new task and watch it show up on your phone!"].exists)
+        XCTAssertTrue(app.buttons["Share or Copy Link"].exists)
+
+        app.buttons["Close"].tap()
+
+        XCTAssertTrue(app.staticTexts["what are you holding?"].waitForExistence(timeout: 3))
+        XCTAssertTrue(app.buttons["Mac not connected. Setup instructions."].exists)
+
+        app.buttons["Mac not connected. Setup instructions."].tap()
+        XCTAssertTrue(app.staticTexts["Connect your Mac"].waitForExistence(timeout: 3))
     }
 
     @MainActor

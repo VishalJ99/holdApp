@@ -47,7 +47,7 @@ Keywords:
 focus,task,adhd,todo,productivity,standby,reminder,workflow,goals,notes,whiteboard
 
 What's new:
-Initial App Store release with refreshed Hold branding and icon.
+Adds the first-run Mac connection flow and simplified one-task iPhone holding surface.
 
 Review notes:
 The iOS app works standalone. If no fresh Mac heartbeat is available through the user's private iCloud container, onboarding leads to a single current-task entry field. When the Mac app is running on the same iCloud account, iOS mirrors the current task pointer and refreshes through CloudKit notifications. No reviewer account is required.

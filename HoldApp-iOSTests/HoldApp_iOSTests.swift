@@ -6,7 +6,7 @@
 //
 
 import Testing
-@testable import HoldApp_iOS
+@testable import Hold
 
 struct HoldApp_iOSTests {
 

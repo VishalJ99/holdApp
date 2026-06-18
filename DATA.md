@@ -4,6 +4,7 @@
 - `app-store-assets/app-store-connect/` - Platform-specific App Store Connect handoff files for iOS and macOS, API update docs, retained live preflight report, and reproduction notes for App Store Connect update workflows.
 - `app-store-assets/app-store-connect/landing-preview.html` - Generated local App Store product-page preview for comparing iOS and macOS listing copy, screenshots, icons, and field-length meters before App Store Connect submission.
 - `app-store-assets/app-store-connect/submission-1.1.md` - Release submission log for the iOS/macOS `1.1` binary archive, upload, and App Review workflow.
+- `app-store-assets/app-store-connect/submission-1.2-ios.md` - Release submission log for the iOS-only `1.2` build `10` archive, upload, and App Review workflow.
 - `app-store-assets/app-store-connect/submission-1.2-macos.md` - Release submission log for the macOS-only `1.2` build `11` archive, upload, keychain unlock handling, and App Review workflow.
 - `app-store-assets/app-store-connect/export-ios-app-store.plist` and `app-store-assets/app-store-connect/export-macos-app-store.plist` - Xcode App Store Connect upload export options for the `1.1` iOS and macOS archives.
 - `app-store-assets/screenshots/` - Generated App Store Connect screenshot assets for iPhone, iPad, and Mac; regenerate with `app-store-assets/generate_screenshots.sh`.
