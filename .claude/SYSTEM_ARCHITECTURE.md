@@ -41,8 +41,8 @@ Hold is a local-first task management app with CloudKit synchronization for iPho
   - Linear code flow, instant local reads
 - **CloudKitManager** - ONLY handles CurrentTaskPointer operations
   - `fetchCurrentTask()` - iPhone reads pointer
-  - `updateCurrentTaskPointer()` - Mac updates pointer
-  - `clearCurrentTaskPointer()` - Clear when last task dismissed
+  - `updateCurrentTaskPointer()` - Mac updates pointer through a serialized/coalesced save queue with a `CKModifyRecordsOperation` `.allKeys` overwrite and one server-record retry for rapid navigation conflicts
+  - `clearCurrentTaskPointer()` - Clear when last task dismissed, using the same overwrite/retry save path
   - `subscribeToTaskChanges()` - iPhone push notifications
 
 ### Benefits
@@ -365,6 +365,7 @@ User presses Cmd+Shift+Space
 - `fetchCurrentTask()` - Read pointer (iPhone uses this)
 - `updateCurrentTaskPointer(taskId, text, parentId, rootId)` - Write pointer
 - `clearCurrentTaskPointer()` - Set all fields to nil (when last task dismissed)
+- Pointer saves are serialized and pending writes are coalesced so rapid Mac-side navigation preserves the latest requested state. Saves use `CKModifyRecordsOperation` with `.allKeys`; if CloudKit returns `serverRecordChanged` through a partial failure, the queued pointer fields are reapplied to the server record and retried once.
 - `subscribeToTaskChanges()` - Setup push notifications for iPhone
 
 **Important**: Does NOT save/query Task records. Only manages the pointer.
@@ -753,6 +754,7 @@ If on "Review", indicator shows: ○ ● ○ (position 2 of 3 leaves)
 
 ```
 HoldApp/
+├── AGENTS.md                                  # Mandatory project execution protocols
 ├── HoldApp/                                  # Mac App Target
 │   ├── AppDelegate.swift                    # App lifecycle, task coordinator, menu bar
 │   ├── LocalTaskStore.swift                 # Local JSON storage (~/Library/Application Support)

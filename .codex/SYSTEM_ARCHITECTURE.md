@@ -13,6 +13,7 @@ Last updated: June 19, 2026
 - `design/Vision.md` contains product positioning and App Store copy source material.
 - `.claude/SYSTEM_ARCHITECTURE.md` contains the older detailed architecture notes for local-first task storage, hotkeys, and selectors.
 - `PRIVACY.md` and `SUPPORT.md` are public App Store listing documents.
+- `AGENTS.md` contains mandatory project execution protocols, including architecture-document maintenance and the post-change localized-surface review requirement.
 - `release_guide.md` is the release playbook for local App Store page preview, metadata validation, Xcode archive/upload, App Store Connect submission, monitoring, and release closeout checks.
 - `decisions/` records durable product and implementation choices. Reviewed human decisions live in `decisions/human/`; agent-authored decisions awaiting review live in `decisions/agent/pending/`.
 - `DATA.md` is the lightweight manifest for retained non-source assets and App Store metadata.
@@ -32,7 +33,7 @@ Last updated: June 19, 2026
 ## Core Data Flow
 
 1. The macOS app stores full task records locally in `~/Library/Application Support/HoldApp/tasks.json` through `HoldApp/LocalTaskStore.swift`.
-2. The macOS app writes only the current display pointer to the user's private CloudKit database through `HoldApp/CloudKitManager.swift`; pointer writes fetch the fixed `CURRENT_TASK_POINTER` record first, then update or create it with `CKDatabase.save` so the known record id remains fetchable by iOS.
+2. The macOS app writes only the current display pointer to the user's private CloudKit database through `HoldApp/CloudKitManager.swift`; pointer writes are serialized through a local save queue, and pending writes are coalesced so rapid navigation eventually writes only the latest requested display state. Each save fetches the fixed `CURRENT_TASK_POINTER` record first, then updates or creates it through `CKModifyRecordsOperation` with `.allKeys`. If CloudKit still reports `serverRecordChanged` through a partial failure, the manager reapplies the queued pointer fields to CloudKit's server record and retries once.
 3. The app does not use a separate Mac presence record. iOS treats the Mac as connected when `CURRENT_TASK_POINTER` exists in the user's private CloudKit database; an absent pointer leaves iOS in local-only standalone mode.
 4. The shared CloudKit manager uses the explicit `iCloud.com.vishaljain.HoldApp` container so the iOS companion and macOS app read/write the same private CloudKit pointer.
 5. `HoldApp/AppDelegate.swift` creates the menu-bar status item before CloudKit startup. Debug launches with `HOLD_MENU_BAR_SMOKE_TEST=1` return immediately after menu-bar setup so unsigned local builds can verify the compiled status-item icon without touching CloudKit or Keychain.

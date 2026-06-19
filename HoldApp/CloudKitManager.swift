@@ -27,6 +27,16 @@ class CloudKitManager {
     private var heartbeatTimer: Timer?
     private let currentTaskRecordType = "CurrentTaskPointer"
     private let currentTaskSubscriptionID = "current-task-pointer-changes"
+    private let pointerSaveQueue = DispatchQueue(label: "com.vishaljain.HoldApp.current-task-pointer-save")
+    private var pointerSaveInFlight = false
+    private var pendingPointerSave: PointerSaveRequest?
+
+    private struct PointerSaveRequest {
+        let action: String
+        let startTime: Date
+        let applyFields: (CKRecord) -> Void
+        let completion: (Error?) -> Void
+    }
 
     private init() {
         let configuredContainer = CKContainer(identifier: Self.requiredContainerIdentifier)
@@ -165,8 +175,9 @@ class CloudKitManager {
         }
     }
 
-    // Update the current task pointer record (single operation, no fetch needed)
-    // Uses CKModifyRecordsOperation with .allKeys policy to overwrite without conflict check
+    // Update the current task pointer record.
+    // Pointer saves are serialized and pending writes are coalesced so rapid
+    // Mac-side navigation eventually writes only the latest requested state.
     func updateCurrentTaskPointer(
         taskId: String,
         text: String,
@@ -185,81 +196,125 @@ class CloudKitManager {
         print("🔗 [Pointer Update] taskId=\(taskId) | parentId=\(parentId ?? "nil") | rootId=\(rootId ?? "nil")")
         print("📊 [Leaf Update] position=\(siblingPosition?.description ?? "nil")/\(siblingCount?.description ?? "nil") | ellipsis=\(showEllipsis)")
 
+        let request = PointerSaveRequest(
+            action: "updated",
+            startTime: pointerStartTime,
+            applyFields: { [weak self] pointerRecord in
+                self?.applyPointerFields(
+                    to: pointerRecord,
+                    taskId: taskId,
+                    text: text,
+                    parentId: parentId,
+                    rootId: rootId,
+                    parentTaskText: parentTaskText,
+                    rootTaskText: rootTaskText,
+                    showEllipsis: showEllipsis,
+                    siblingPosition: siblingPosition,
+                    siblingCount: siblingCount
+                )
+            },
+            completion: completion
+        )
+
+        enqueuePointerSave(request)
+    }
+
+    private func enqueuePointerSave(_ request: PointerSaveRequest) {
+        pointerSaveQueue.async { [weak self] in
+            guard let self else { return }
+
+            if let supersededRequest = self.pendingPointerSave {
+                logger.error("[SAVE] SUPERSEDED pending pointer \(supersededRequest.action, privacy: .public)")
+                supersededRequest.completion(nil)
+            }
+
+            self.pendingPointerSave = request
+
+            if !self.pointerSaveInFlight {
+                self.startNextPointerSaveLocked()
+            }
+        }
+    }
+
+    private func startNextPointerSaveLocked() {
+        guard let request = pendingPointerSave else {
+            pointerSaveInFlight = false
+            return
+        }
+
+        pendingPointerSave = nil
+        pointerSaveInFlight = true
+
+        performPointerSave(request) { [weak self] in
+            self?.pointerSaveQueue.async {
+                guard let self else { return }
+                self.pointerSaveInFlight = false
+                self.startNextPointerSaveLocked()
+            }
+        }
+    }
+
+    private func performPointerSave(_ request: PointerSaveRequest, finished: @escaping () -> Void) {
         let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
 
         database.fetch(withRecordID: pointerID) { [weak self] record, error in
-            guard let self else { return }
+            guard let self else {
+                finished()
+                return
+            }
 
             if let existingRecord = record {
-                logger.error("[SAVE] Existing pointer found - updating")
-                self.applyPointerFields(
-                    to: existingRecord,
-                    taskId: taskId,
-                    text: text,
-                    parentId: parentId,
-                    rootId: rootId,
-                    parentTaskText: parentTaskText,
-                    rootTaskText: rootTaskText,
-                    showEllipsis: showEllipsis,
-                    siblingPosition: siblingPosition,
-                    siblingCount: siblingCount
-                )
-                self.savePointerRecord(existingRecord, startTime: pointerStartTime, action: "updated", completion: completion)
+                logger.error("[SAVE] Existing pointer found - \(request.action, privacy: .public)")
+                self.savePointerRecord(
+                    existingRecord,
+                    startTime: request.startTime,
+                    action: request.action,
+                    applyFields: request.applyFields
+                ) { error in
+                    request.completion(error)
+                    finished()
+                }
             } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
                 logger.error("[SAVE] Pointer missing - creating")
-                let newRecord = CKRecord(recordType: "CurrentTaskPointer", recordID: pointerID)
-                self.applyPointerFields(
-                    to: newRecord,
-                    taskId: taskId,
-                    text: text,
-                    parentId: parentId,
-                    rootId: rootId,
-                    parentTaskText: parentTaskText,
-                    rootTaskText: rootTaskText,
-                    showEllipsis: showEllipsis,
-                    siblingPosition: siblingPosition,
-                    siblingCount: siblingCount
-                )
-                self.savePointerRecord(newRecord, startTime: pointerStartTime, action: "created", completion: completion)
+                let newRecord = CKRecord(recordType: currentTaskRecordType, recordID: pointerID)
+                self.savePointerRecord(
+                    newRecord,
+                    startTime: request.startTime,
+                    action: "created",
+                    applyFields: request.applyFields
+                ) { error in
+                    request.completion(error)
+                    finished()
+                }
             } else {
-                let pointerTime = Date().timeIntervalSince(pointerStartTime)
+                let pointerTime = Date().timeIntervalSince(request.startTime)
                 let message = error?.localizedDescription ?? "unknown"
                 logger.error("[SAVE] FETCH ERROR - \(message, privacy: .public)")
                 print("❌ [CloudKit] Pointer fetch failed after \(String(format: "%.2f", pointerTime))s: \(message)")
-                completion(error)
+                request.completion(error)
+                finished()
             }
         }
     }
 
     // Clear the current task pointer (for empty state or startup sync)
-    // Uses CKModifyRecordsOperation with .allKeys policy to overwrite without conflict check
+    // Uses the same overwrite path as task updates so rapid clear/update races do not
+    // leave iOS with a stale pointer.
     func clearCurrentTaskPointer(completion: @escaping (Error?) -> Void) {
         logger.error("[CLEAR] clearCurrentTaskPointer called")
         let clearStartTime = Date()
         print("🗑️ [CloudKit] Clearing CurrentTaskPointer at \(clearStartTime)")
 
-        let pointerID = CKRecord.ID(recordName: "CURRENT_TASK_POINTER")
+        let request = PointerSaveRequest(
+            action: "cleared",
+            startTime: clearStartTime,
+            applyFields: { [weak self] pointerRecord in
+                self?.applyEmptyPointerFields(to: pointerRecord)
+            },
+            completion: completion
+        )
 
-        database.fetch(withRecordID: pointerID) { [weak self] record, error in
-            guard let self else { return }
-
-            if let existingRecord = record {
-                logger.error("[CLEAR] Existing pointer found - clearing")
-                self.applyEmptyPointerFields(to: existingRecord)
-                self.savePointerRecord(existingRecord, startTime: clearStartTime, action: "cleared", completion: completion)
-            } else if let fetchError = error as? CKError, fetchError.code == .unknownItem {
-                logger.error("[CLEAR] Pointer missing - creating empty pointer")
-                let emptyRecord = CKRecord(recordType: "CurrentTaskPointer", recordID: pointerID)
-                self.applyEmptyPointerFields(to: emptyRecord)
-                self.savePointerRecord(emptyRecord, startTime: clearStartTime, action: "created empty", completion: completion)
-            } else {
-                let clearTime = Date().timeIntervalSince(clearStartTime)
-                let message = error?.localizedDescription ?? "unknown"
-                logger.error("[CLEAR] FETCH ERROR - \(message, privacy: .public)")
-                print("❌ [CloudKit] Pointer fetch failed before clear after \(String(format: "%.2f", clearTime))s: \(message)")
-                completion(error)
-            }
-        }
+        enqueuePointerSave(request)
     }
 
     private func applyPointerFields(
@@ -303,20 +358,67 @@ class CloudKitManager {
         _ record: CKRecord,
         startTime: Date,
         action: String,
+        retryCount: Int = 0,
+        applyFields: @escaping (CKRecord) -> Void,
         completion: @escaping (Error?) -> Void
     ) {
-        database.save(record) { _, saveError in
+        applyFields(record)
+
+        let operation = CKModifyRecordsOperation(recordsToSave: [record], recordIDsToDelete: nil)
+        operation.savePolicy = .allKeys
+        operation.qualityOfService = .userInitiated
+        operation.modifyRecordsResultBlock = { [weak self] result in
+            guard let self else { return }
             let pointerTime = Date().timeIntervalSince(startTime)
-            if let saveError {
+            switch result {
+            case .failure(let saveError):
+                if retryCount == 0,
+                   let serverRecord = self.serverRecordChangedRecord(from: saveError) {
+                    logger.error("[SAVE] CONFLICT - retrying \(action, privacy: .public) with server record")
+                    print("🔁 [CloudKit] Pointer \(action) hit record conflict after \(String(format: "%.2f", pointerTime))s; retrying with server record")
+                    self.savePointerRecord(
+                        serverRecord,
+                        startTime: startTime,
+                        action: action,
+                        retryCount: retryCount + 1,
+                        applyFields: applyFields,
+                        completion: completion
+                    )
+                    return
+                }
+
                 logger.error("[SAVE] ERROR - \(saveError.localizedDescription, privacy: .public)")
                 print("❌ [CloudKit] Pointer \(action) failed after \(String(format: "%.2f", pointerTime))s: \(saveError.localizedDescription)")
                 completion(saveError)
-            } else {
+
+            case .success:
                 logger.error("[SAVE] OK - pointer \(action, privacy: .public) in CloudKit")
                 print("✅ [CloudKit] Pointer \(action) in \(String(format: "%.2f", pointerTime))s")
                 completion(nil)
             }
         }
+        database.add(operation)
+    }
+
+    private func serverRecordChangedRecord(from error: Error) -> CKRecord? {
+        guard let ckError = error as? CKError else {
+            return nil
+        }
+
+        if ckError.code == .serverRecordChanged {
+            return ckError.userInfo[CKRecordChangedErrorServerRecordKey] as? CKRecord
+        }
+
+        if ckError.code == .partialFailure,
+           let partialErrors = ckError.partialErrorsByItemID {
+            for partialError in partialErrors.values {
+                if let serverRecord = serverRecordChangedRecord(from: partialError) {
+                    return serverRecord
+                }
+            }
+        }
+
+        return nil
     }
 
     // Subscribe to current task pointer changes (for real-time updates on iPhone)
