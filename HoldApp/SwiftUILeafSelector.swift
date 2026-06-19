@@ -104,17 +104,59 @@ struct LeafSelectorView: View {
 
             Spacer()
 
-            Text("All roots")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
-
-            Toggle("", isOn: $showsAllRoots)
-                .toggleStyle(.switch)
-                .labelsHidden()
-                .controlSize(.small)
+            LeafScopeToggle(showsAllRoots: $showsAllRoots)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+    }
+}
+
+// MARK: - Scope Toggle
+
+private struct LeafScopeToggle: View {
+    @Binding var showsAllRoots: Bool
+
+    var body: some View {
+        HStack(spacing: 2) {
+            scopeButton(title: "Current root", isSelected: !showsAllRoots) {
+                showsAllRoots = false
+            }
+
+            scopeButton(title: "All roots", isSelected: showsAllRoots) {
+                showsAllRoots = true
+            }
+        }
+        .padding(2)
+        .background(
+            Capsule(style: .continuous)
+                .fill(Color.white.opacity(0.10))
+        )
+        .overlay(
+            Capsule(style: .continuous)
+                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+        )
+    }
+
+    private func scopeButton(title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(isSelected ? .white : .white.opacity(0.62))
+                .lineLimit(1)
+                .padding(.horizontal, 8)
+                .frame(height: 24)
+                .background(
+                    Capsule(style: .continuous)
+                        .fill(isSelected ? Color.white.opacity(0.24) : Color.clear)
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(isSelected ? Color.white.opacity(0.32) : Color.clear, lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityValue(isSelected ? "selected" : "not selected")
     }
 }
 
@@ -249,6 +291,10 @@ struct LeafSelectorContentView: View {
     }
 }
 
+private final class DraggableLeafSelectorHostingView: NSHostingView<LeafSelectorContentView> {
+    override var mouseDownCanMoveWindow: Bool { true }
+}
+
 // MARK: - NSPanel Wrapper
 
 class SwiftUILeafSelectorPanel: NSPanel {
@@ -269,7 +315,7 @@ class SwiftUILeafSelectorPanel: NSPanel {
 
         // Configure panel
         self.level = .floating
-        self.isMovableByWindowBackground = false
+        self.isMovableByWindowBackground = true
         self.hidesOnDeactivate = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         self.backgroundColor = .clear
@@ -341,7 +387,7 @@ class SwiftUILeafSelectorPanel: NSPanel {
 
     private func setupHostingView() {
         let contentView = LeafSelectorContentView(model: contentModel)
-        hostingView = NSHostingView(rootView: contentView)
+        hostingView = DraggableLeafSelectorHostingView(rootView: contentView)
         hostingView.frame = self.contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]
 
