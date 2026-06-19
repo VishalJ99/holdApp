@@ -32,9 +32,9 @@ class HotkeyManager {
         )
 
         // NOTE: Escape is NOT registered globally - each panel handles it locally in keyDown()
-        // This allows Escape to work context-aware (dismiss spotlight OR sibling selector)
+        // This allows Escape to work context-aware (dismiss spotlight OR leaf selector)
 
-        // Register Sibling Selector hotkey
+        // Register Leaf Selector hotkey
         registerHotkey(
             keyCode: prefs.siblingSelector.keyCode,
             modifiers: prefs.siblingSelector.modifiers,

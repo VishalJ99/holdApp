@@ -747,18 +747,47 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         print("📊 [Leaf Selector] Current task: \(current.text)")
         print("🔗 [Leaf Selector] Root ID: \(rootId)")
 
+        let currentRootText = LocalTaskStore.shared.fetchTaskById(rootId)?.text ?? current.text
+
         // Fetch all leaves in this root from local storage (instant!)
-        let leaves = LocalTaskStore.shared.fetchLeaves(rootId: rootId)
-        let allLeaves = leaves.map { (id: $0.id, text: $0.text) }
+        let currentRootLeaves = LocalTaskStore.shared.fetchLeaves(rootId: rootId).map { leaf in
+            LeafItem(
+                id: leaf.id,
+                text: leaf.text,
+                rootText: currentRootText,
+                isCurrent: leaf.id == current.id,
+                isCurrentRoot: true
+            )
+        }
 
-        // Find current task's index among leaves
-        let currentIndex = allLeaves.firstIndex(where: { $0.id == current.id }) ?? 0
+        // Build the all-roots view in root creation order, with each root's leaves grouped together.
+        var allRootLeaves: [LeafItem] = []
+        for root in LocalTaskStore.shared.fetchRoots() {
+            let rootLeaves = LocalTaskStore.shared.fetchLeaves(rootId: root.id).map { leaf in
+                LeafItem(
+                    id: leaf.id,
+                    text: leaf.text,
+                    rootText: root.text,
+                    isCurrent: leaf.id == current.id,
+                    isCurrentRoot: root.id == rootId
+                )
+            }
+            allRootLeaves.append(contentsOf: rootLeaves)
+        }
 
-        print("✅ [Leaf Selector] Found \(allLeaves.count) leaves in root")
-        print("📊 [Leaf Selector] Current index: \(currentIndex + 1)/\(allLeaves.count)")
+        if allRootLeaves.isEmpty {
+            allRootLeaves = currentRootLeaves
+        }
 
-        // Show panel with leaves
-        leafSelectorPanel.show(leaves: allLeaves, currentIndex: currentIndex)
+        print("✅ [Leaf Selector] Found \(currentRootLeaves.count) leaves in current root")
+        print("✅ [Leaf Selector] Found \(allRootLeaves.count) leaves across all roots")
+
+        // Show panel with both scopes; the header toggle controls which list is visible.
+        leafSelectorPanel.show(
+            currentRootLeaves: currentRootLeaves,
+            allRootLeaves: allRootLeaves,
+            currentTaskId: current.id
+        )
     }
 
     private func handleLeafSelection(taskId: String, taskText: String) {

@@ -66,7 +66,7 @@ Mac Task Creation:
 3. Update CurrentTaskPointer on CloudKit (iPhone sync only)
 4. CloudKit subscription fires → iPhone reads pointer → displays task
 
-Root/Sibling Selection:
+Root/Leaf Selection:
 1. LocalTaskStore.fetchRoots() or fetchSiblings() (instant)
 2. Display selector panel
 3. User selects → update CurrentTaskPointer → iPhone syncs
@@ -108,7 +108,7 @@ Root/Sibling Selection:
 
 **5 Global Hotkeys** (all customizable via Preferences):
 1. **Show Spotlight** (default: Cmd+Shift+Space)
-2. **Leaf Selector** (default: Cmd+Shift+S) - shows all leaf tasks in current root
+2. **Leaf Selector** (default: Cmd+Shift+S) - shows current-root leaves by default, with an in-panel toggle for all roots
 3. **Root Selector** (default: Cmd+Shift+R)
 4. **Dismiss Task** (default: Cmd+Shift+D)
 5. **Nuke All Tasks** (default: Cmd+Shift+Backspace - requires 2 presses)
@@ -187,19 +187,22 @@ Root/Sibling Selection:
 
 ### 6. Leaf Selector (Cmd+Shift+S)
 
-**Purpose**: Switch to any actionable (leaf) task in current root
+**Purpose**: Switch to any actionable (leaf) task in the current root or, when toggled, across all roots
 
 **Behavior**:
-- Shows all leaf tasks in the current root hierarchy (not just siblings)
+- Shows all leaf tasks in the current root hierarchy by default
+- Header toggle switches live between current-root leaves and all-root leaves
+- Last selected scope is persisted in `UserDefaults`
+- All-root mode shows root context under each leaf
 - Leaf = task with no children (actionable endpoints)
-- Fetches via `LocalTaskStore.fetchLeaves(rootId)`
+- Fetches current-root leaves via `LocalTaskStore.fetchLeaves(rootId)` and all-root leaves by walking `LocalTaskStore.fetchRoots()`
 - Arrow keys navigate, Enter selects
 - Updates current task pointer on selection
 
 **Why Leaf instead of Sibling?**
 - Siblings = limited to same parent (too restrictive)
 - Leaves = all actionable tasks across entire tree (more useful)
-- Allows jumping between branches while staying in same root
+- Allows jumping between branches while staying in same root, or across roots when the all-roots toggle is enabled
 
 **Example Tree**:
 ```
@@ -209,12 +212,12 @@ Root: "Complete hold app"
   └─ "Add preferences"
       └─ "Design UI" ← LEAF
 ```
-Leaf Selector shows both "Test hotkeys" AND "Design UI" (any leaf in root)
+Leaf Selector shows both "Test hotkeys" AND "Design UI" in current-root mode; all-roots mode additionally includes leaves from other roots.
 
 **Implementation** (`SwiftUILeafSelector.swift`):
 - SwiftUI-based flat list with NSPanel wrapper
 - `SwiftUILeafSelectorPanel` - handles keyboard events (arrows, Enter, Escape)
-- `LeafSelectorView` - SwiftUI List with header "Select Leaf"
+- `LeafSelectorView` - SwiftUI List with header "Select Leaf" and "All roots" toggle
 - `LeafRowView` - bullet icon + text + "current" badge
 - Styling: `.ultraThinMaterial` blur, 16pt corners, white 0.2 border
 - Custom selection highlighting (white 0.15 opacity background)
@@ -571,7 +574,7 @@ ToastManager.shared.show("Error message", level: .error)
 
 **Key Difference**: Task content stays on Mac (tasks.json). iPhone only gets pointer fields (id, text, parent_id, root_id) from CloudKit.
 
-### Task Selection Flow (Root/Sibling Selector)
+### Task Selection Flow (Root/Leaf Selector)
 
 ```
 1. User presses Cmd+Shift+R (root selector)

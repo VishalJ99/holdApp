@@ -139,7 +139,7 @@ class HotkeyPreferencesManager {
         // Check for duplicates
         let bindings: [(String, HotkeyBinding)] = [
             ("Show Spotlight", preferences.showSpotlight),
-            ("Sibling Selector", preferences.siblingSelector),
+            ("Leaf Selector", preferences.siblingSelector),
             ("Root Selector", preferences.rootSelector),
             ("Dismiss Task", preferences.dismissTask),
             ("Nuke All Tasks", preferences.nukeAllTasks)

@@ -9,18 +9,49 @@
 import SwiftUI
 import Cocoa
 
+// MARK: - Leaf Selector Preferences
+
+private enum LeafSelectorScopePreference {
+    private static let userDefaultsKey = "com.holdapp.leafSelector.showsAllRoots"
+
+    static var showsAllRoots: Bool {
+        UserDefaults.standard.bool(forKey: userDefaultsKey)
+    }
+
+    static func setShowsAllRoots(_ value: Bool) {
+        UserDefaults.standard.set(value, forKey: userDefaultsKey)
+    }
+}
+
 // MARK: - Leaf Item Model
 
 struct LeafItem: Hashable, Identifiable {
     let id: String
     let text: String
+    let rootText: String?
     let isCurrent: Bool
+    let isCurrentRoot: Bool
+
+    init(
+        id: String,
+        text: String,
+        rootText: String? = nil,
+        isCurrent: Bool,
+        isCurrentRoot: Bool = true
+    ) {
+        self.id = id
+        self.text = text
+        self.rootText = rootText
+        self.isCurrent = isCurrent
+        self.isCurrentRoot = isCurrentRoot
+    }
 }
 
 // MARK: - SwiftUI Leaf Selector View
 
 struct LeafSelectorView: View {
     @Binding var selection: LeafItem?
+    @Binding var showsAllRoots: Bool
     let leaves: [LeafItem]
 
     var body: some View {
@@ -35,7 +66,11 @@ struct LeafSelectorView: View {
             ScrollViewReader { proxy in
                 List {
                     ForEach(leaves) { item in
-                        LeafRowView(item: item, isSelected: selection?.id == item.id)
+                        LeafRowView(
+                            item: item,
+                            isSelected: selection?.id == item.id,
+                            showsRootContext: showsAllRoots
+                        )
                             .tag(item)
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -58,12 +93,25 @@ struct LeafSelectorView: View {
     }
 
     private var headerView: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 10) {
             Text("Select Leaf")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.white.opacity(0.6))
 
+            Text("\(leaves.count)")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundColor(.white.opacity(0.45))
+
             Spacer()
+
+            Text("All roots")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(.white.opacity(0.6))
+
+            Toggle("", isOn: $showsAllRoots)
+                .toggleStyle(.switch)
+                .labelsHidden()
+                .controlSize(.small)
         }
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
@@ -75,6 +123,7 @@ struct LeafSelectorView: View {
 struct LeafRowView: View {
     let item: LeafItem
     let isSelected: Bool
+    let showsRootContext: Bool
 
     var body: some View {
         HStack(spacing: 8) {
@@ -85,10 +134,19 @@ struct LeafRowView: View {
                 .frame(width: 14)
 
             // Text
-            Text(item.text)
-                .font(.system(size: 14, weight: (item.isCurrent || isSelected) ? .semibold : .regular))
-                .foregroundColor((item.isCurrent || isSelected) ? .white : .white.opacity(0.7))
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.text)
+                    .font(.system(size: 14, weight: (item.isCurrent || isSelected) ? .semibold : .regular))
+                    .foregroundColor((item.isCurrent || isSelected) ? .white : .white.opacity(0.7))
+                    .lineLimit(1)
+
+                if showsRootContext, let rootText = item.rootText {
+                    Text(item.isCurrentRoot ? "current root: \(rootText)" : "root: \(rootText)")
+                        .font(.system(size: 10, weight: .regular))
+                        .foregroundColor(.white.opacity(0.42))
+                        .lineLimit(1)
+                }
+            }
 
             Spacer()
 
@@ -103,7 +161,7 @@ struct LeafRowView: View {
                     .cornerRadius(4)
             }
         }
-        .frame(height: 32)
+        .frame(height: showsRootContext ? 42 : 32)
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
@@ -117,11 +175,56 @@ struct LeafRowView: View {
 // MARK: - Observable Model
 
 class LeafSelectorModel: ObservableObject {
-    @Published var leaves: [LeafItem] = []
+    @Published private(set) var currentRootLeaves: [LeafItem] = []
+    @Published private(set) var allRootLeaves: [LeafItem] = []
     @Published var selection: LeafItem?
+    @Published private(set) var showsAllRoots: Bool = LeafSelectorScopePreference.showsAllRoots
+
+    private var currentTaskId: String?
 
     var onLeafSelected: ((String, String) -> Void)?
     var onCancel: (() -> Void)?
+    var onScopeChanged: (() -> Void)?
+
+    var visibleLeaves: [LeafItem] {
+        showsAllRoots ? allRootLeaves : currentRootLeaves
+    }
+
+    func configure(
+        currentRootLeaves: [LeafItem],
+        allRootLeaves: [LeafItem],
+        currentTaskId: String
+    ) {
+        self.currentRootLeaves = currentRootLeaves
+        self.allRootLeaves = allRootLeaves.isEmpty ? currentRootLeaves : allRootLeaves
+        self.currentTaskId = currentTaskId
+        self.showsAllRoots = LeafSelectorScopePreference.showsAllRoots
+        selectCurrentOrFirst()
+    }
+
+    func setShowsAllRoots(_ showsAllRoots: Bool) {
+        guard self.showsAllRoots != showsAllRoots else { return }
+
+        let previousSelectionId = selection?.id
+        self.showsAllRoots = showsAllRoots
+        LeafSelectorScopePreference.setShowsAllRoots(showsAllRoots)
+        selectCurrentOrFirst(preferredTaskId: previousSelectionId)
+        onScopeChanged?()
+    }
+
+    private func selectCurrentOrFirst(preferredTaskId: String? = nil) {
+        let leaves = visibleLeaves
+
+        if let preferredTaskId,
+           let preferred = leaves.first(where: { $0.id == preferredTaskId }) {
+            selection = preferred
+        } else if let currentTaskId,
+                  let current = leaves.first(where: { $0.id == currentTaskId }) {
+            selection = current
+        } else {
+            selection = leaves.first
+        }
+    }
 }
 
 // MARK: - Content View
@@ -132,7 +235,11 @@ struct LeafSelectorContentView: View {
     var body: some View {
         LeafSelectorView(
             selection: $model.selection,
-            leaves: model.leaves
+            showsAllRoots: Binding(
+                get: { model.showsAllRoots },
+                set: { model.setShowsAllRoots($0) }
+            ),
+            leaves: model.visibleLeaves
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -199,22 +306,24 @@ class SwiftUILeafSelectorPanel: NSPanel {
             }
 
         case 126: // Up arrow
+            let leaves = contentModel.visibleLeaves
             if let current = contentModel.selection,
-               let currentIndex = contentModel.leaves.firstIndex(of: current),
+               let currentIndex = leaves.firstIndex(of: current),
                currentIndex > 0 {
-                contentModel.selection = contentModel.leaves[currentIndex - 1]
-            } else if contentModel.selection == nil && !contentModel.leaves.isEmpty {
-                contentModel.selection = contentModel.leaves.last
+                contentModel.selection = leaves[currentIndex - 1]
+            } else if contentModel.selection == nil && !leaves.isEmpty {
+                contentModel.selection = leaves.last
             }
             return true
 
         case 125: // Down arrow
+            let leaves = contentModel.visibleLeaves
             if let current = contentModel.selection,
-               let currentIndex = contentModel.leaves.firstIndex(of: current),
-               currentIndex < contentModel.leaves.count - 1 {
-                contentModel.selection = contentModel.leaves[currentIndex + 1]
-            } else if contentModel.selection == nil && !contentModel.leaves.isEmpty {
-                contentModel.selection = contentModel.leaves.first
+               let currentIndex = leaves.firstIndex(of: current),
+               currentIndex < leaves.count - 1 {
+                contentModel.selection = leaves[currentIndex + 1]
+            } else if contentModel.selection == nil && !leaves.isEmpty {
+                contentModel.selection = leaves.first
             }
             return true
 
@@ -250,6 +359,9 @@ class SwiftUILeafSelectorPanel: NSPanel {
         contentModel.onCancel = { [weak self] in
             self?.onCancel?()
         }
+        contentModel.onScopeChanged = { [weak self] in
+            self?.resizeForVisibleLeaves()
+        }
     }
 
     override var canBecomeKey: Bool { true }
@@ -260,41 +372,38 @@ class SwiftUILeafSelectorPanel: NSPanel {
         onCancel?()
     }
 
-    func show(leaves: [(id: String, text: String)], currentIndex: Int) {
-        // Build leaf items
-        let leafItems = leaves.enumerated().map { index, leaf in
-            LeafItem(
-                id: leaf.id,
-                text: leaf.text,
-                isCurrent: index == currentIndex
-            )
-        }
-
-        // Update model
-        contentModel.leaves = leafItems
-        contentModel.selection = nil
-
-        // Find and select current leaf
-        if currentIndex >= 0 && currentIndex < leafItems.count {
-            contentModel.selection = leafItems[currentIndex]
-        } else if let first = leafItems.first {
-            contentModel.selection = first
-        }
-
-        // Calculate height based on leaf count
-        let rowHeight: CGFloat = 36
-        let headerHeight: CGFloat = 50
-        let minHeight: CGFloat = 150
-        let maxHeight: CGFloat = 500
-        let calculatedHeight = CGFloat(leaves.count) * rowHeight + headerHeight + 20
-        let newHeight = min(max(calculatedHeight, minHeight), maxHeight)
-
-        self.setFrame(NSRect(x: 0, y: 0, width: 550, height: newHeight), display: false)
+    func show(
+        currentRootLeaves: [LeafItem],
+        allRootLeaves: [LeafItem],
+        currentTaskId: String
+    ) {
+        contentModel.configure(
+            currentRootLeaves: currentRootLeaves,
+            allRootLeaves: allRootLeaves,
+            currentTaskId: currentTaskId
+        )
+        resizeForVisibleLeaves(display: false, animate: false)
 
         // Show panel (matches SpotlightPanel pattern)
         self.center()
         self.orderFrontRegardless()
         self.makeKey()
+    }
+
+    private func resizeForVisibleLeaves(display: Bool = true, animate: Bool = true) {
+        let rowHeight: CGFloat = contentModel.showsAllRoots ? 46 : 36
+        let headerHeight: CGFloat = 52
+        let minHeight: CGFloat = 150
+        let maxHeight: CGFloat = 500
+        let calculatedHeight = CGFloat(contentModel.visibleLeaves.count) * rowHeight + headerHeight + 20
+        let newHeight = min(max(calculatedHeight, minHeight), maxHeight)
+
+        var frame = self.frame
+        let center = NSPoint(x: frame.midX, y: frame.midY)
+        frame.size = NSSize(width: 550, height: newHeight)
+        frame.origin = NSPoint(x: center.x - frame.width / 2, y: center.y - frame.height / 2)
+
+        self.setFrame(frame, display: display, animate: animate)
     }
 
     func hide() {
@@ -307,14 +416,21 @@ class SwiftUILeafSelectorPanel: NSPanel {
 #Preview("Leaf Selector") {
     LeafSelectorContentView(model: {
         let model = LeafSelectorModel()
-        model.leaves = [
-            LeafItem(id: "1", text: "Implement user authentication", isCurrent: false),
-            LeafItem(id: "2", text: "Fix webhook timeout bug", isCurrent: true),
-            LeafItem(id: "3", text: "Write unit tests for API", isCurrent: false),
-            LeafItem(id: "4", text: "Update documentation", isCurrent: false),
-            LeafItem(id: "5", text: "Review pull request #42", isCurrent: false)
-        ]
-        model.selection = model.leaves[1]
+        model.configure(
+            currentRootLeaves: [
+                LeafItem(id: "1", text: "Implement user authentication", rootText: "Product launch", isCurrent: false),
+                LeafItem(id: "2", text: "Fix webhook timeout bug", rootText: "Product launch", isCurrent: true),
+                LeafItem(id: "3", text: "Write unit tests for API", rootText: "Product launch", isCurrent: false)
+            ],
+            allRootLeaves: [
+                LeafItem(id: "1", text: "Implement user authentication", rootText: "Product launch", isCurrent: false, isCurrentRoot: true),
+                LeafItem(id: "2", text: "Fix webhook timeout bug", rootText: "Product launch", isCurrent: true, isCurrentRoot: true),
+                LeafItem(id: "3", text: "Write unit tests for API", rootText: "Product launch", isCurrent: false, isCurrentRoot: true),
+                LeafItem(id: "4", text: "Update documentation", rootText: "Release prep", isCurrent: false, isCurrentRoot: false),
+                LeafItem(id: "5", text: "Review pull request #42", rootText: "Release prep", isCurrent: false, isCurrentRoot: false)
+            ],
+            currentTaskId: "2"
+        )
         return model
     }())
     .frame(width: 550, height: 300)

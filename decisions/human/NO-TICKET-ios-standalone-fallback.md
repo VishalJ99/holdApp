@@ -1,6 +1,6 @@
 # iOS local-only standalone fallback before Mac pointer exists
 
-Status: pending human review
+Status: human decision
 Date: 2026-05-14
 Ticket: NO-TICKET
 

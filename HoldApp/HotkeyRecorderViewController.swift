@@ -37,7 +37,7 @@ class HotkeyRecorderViewController: NSViewController {
                 binding: editedPreferences.showSpotlight
             ),
             HotkeyItem(
-                actionName: "Sibling Selector",
+                actionName: "Leaf Selector",
                 actionKey: \.siblingSelector,
                 binding: editedPreferences.siblingSelector
             ),
