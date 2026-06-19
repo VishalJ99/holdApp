@@ -53,6 +53,7 @@ struct LeafSelectorView: View {
     @Binding var selection: LeafItem?
     @Binding var showsAllRoots: Bool
     let leaves: [LeafItem]
+    let onLeafActivated: (LeafItem) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,6 +72,13 @@ struct LeafSelectorView: View {
                             isSelected: selection?.id == item.id,
                             showsRootContext: showsAllRoots
                         )
+                            .onTapGesture {
+                                selection = item
+                            }
+                            .onTapGesture(count: 2) {
+                                selection = item
+                                onLeafActivated(item)
+                            }
                             .tag(item)
                             .listRowBackground(Color.clear)
                             .listRowSeparator(.hidden)
@@ -254,6 +262,11 @@ class LeafSelectorModel: ObservableObject {
         onScopeChanged?()
     }
 
+    func activateLeaf(_ leaf: LeafItem) {
+        selection = leaf
+        onLeafSelected?(leaf.id, leaf.text)
+    }
+
     private func selectCurrentOrFirst(preferredTaskId: String? = nil) {
         let leaves = visibleLeaves
 
@@ -281,7 +294,8 @@ struct LeafSelectorContentView: View {
                 get: { model.showsAllRoots },
                 set: { model.setShowsAllRoots($0) }
             ),
-            leaves: model.visibleLeaves
+            leaves: model.visibleLeaves,
+            onLeafActivated: { model.activateLeaf($0) }
         )
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
@@ -445,9 +459,10 @@ class SwiftUILeafSelectorPanel: NSPanel {
         let newHeight = min(max(calculatedHeight, minHeight), maxHeight)
 
         var frame = self.frame
-        let center = NSPoint(x: frame.midX, y: frame.midY)
+        let maxY = frame.maxY
+        let midX = frame.midX
         frame.size = NSSize(width: 550, height: newHeight)
-        frame.origin = NSPoint(x: center.x - frame.width / 2, y: center.y - frame.height / 2)
+        frame.origin = NSPoint(x: midX - frame.width / 2, y: maxY - frame.height)
 
         self.setFrame(frame, display: display, animate: animate)
     }

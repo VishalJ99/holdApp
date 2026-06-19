@@ -192,8 +192,10 @@ Root/Leaf Selection:
 **Behavior**:
 - Shows all leaf tasks in the current root hierarchy by default
 - Header segmented control switches live between current-root leaves and all-root leaves without the low-contrast native switch tint
+- Scope changes keep the panel's top edge fixed, so the window expands or contracts from the bottom
 - Last selected scope is persisted in `UserDefaults`
 - All-root mode shows root context under each leaf
+- Single-click selects a row; double-click activates it
 - The borderless panel is draggable from its non-control surface
 - Leaf = task with no children (actionable endpoints)
 - Fetches current-root leaves via `LocalTaskStore.fetchLeaves(rootId)` and all-root leaves by walking `LocalTaskStore.fetchRoots()`
@@ -217,7 +219,7 @@ Leaf Selector shows both "Test hotkeys" AND "Design UI" in current-root mode; al
 
 **Implementation** (`SwiftUILeafSelector.swift`):
 - SwiftUI-based flat list with NSPanel wrapper
-- `SwiftUILeafSelectorPanel` - handles keyboard events (arrows, Enter, Escape)
+- `SwiftUILeafSelectorPanel` - handles keyboard events (arrows, Enter, Escape) and top-anchored resize
 - `LeafSelectorView` - SwiftUI List with header "Select Leaf" and neutral current-root/all-roots segmented control
 - `LeafRowView` - bullet icon + text + "current" badge
 - Styling: `.ultraThinMaterial` blur, 16pt corners, white 0.2 border
