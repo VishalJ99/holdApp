@@ -8,6 +8,7 @@
 - `app-store-assets/app-store-connect/submission-1.2-macos.md` - Release submission log for the macOS-only `1.2` build `11` archive, upload, keychain unlock handling, and App Review workflow.
 - `app-store-assets/app-store-connect/submission-1.3-macos.md` - Release submission log for the macOS-only `1.3` build `12` archive, upload, keychain unlock handling, and App Review workflow.
 - `app-store-assets/app-store-connect/submission-1.4-macos.md` - Release submission log for the macOS-only `1.4` build `13` archive, upload, keychain unlock handling, and App Review workflow.
+- `app-store-assets/app-store-connect/submission-1.5-macos.md` - Release submission log for the macOS-only `1.5` build `14` archive, upload, keychain unlock handling, and App Review workflow.
 - `app-store-assets/app-store-connect/export-ios-app-store.plist` and `app-store-assets/app-store-connect/export-macos-app-store.plist` - Xcode App Store Connect upload export options for the `1.1` iOS and macOS archives.
 - `app-store-assets/screenshots/` - Generated App Store Connect screenshot assets for iPhone, iPad, and Mac; regenerate with `app-store-assets/generate_screenshots.sh`.
 - `HoldApp/Assets.xcassets/hold_icon.imageset/` - Generated macOS menu-bar template icon variants for the Hold status item; regenerate with `app-store-assets/branding/generate_icons.sh`.
