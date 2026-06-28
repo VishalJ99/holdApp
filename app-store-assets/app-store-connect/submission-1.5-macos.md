@@ -25,7 +25,7 @@ This macOS-only release ships the light-background readability fixes for the Mac
 
 ## Source State
 
-- Source commit at archive time: `pending`
+- Source commit at archive time: `3a00fc9`
 - Release branch: `jainvishal2212/per-307-ship-ios-first-run-companion-onboarding`
 
 ## Local Version Check
@@ -59,7 +59,7 @@ Result: created macOS version `1.5` as appStoreVersion `50889004-2853-4efd-85a1-
 /Users/vishaljain/.codex/skills/hold-distribution/scripts/hold_distribution.sh archive-upload MAC_OS 1.5 14
 ```
 
-Result: pending.
+Result: archive succeeded and App Store Connect upload succeeded. Release work directory: `/private/tmp/HoldAppRelease-1.5-MAC_OS-20260628123122`; archive path: `/private/tmp/HoldAppRelease-1.5-MAC_OS-20260628123122/Hold-macOS.xcarchive`; uploaded package entered App Store Connect processing.
 
 ## Submission Command
 
@@ -67,7 +67,7 @@ Result: pending.
 HOLD_WAIT_MINUTES=30 /Users/vishaljain/.codex/skills/hold-distribution/scripts/hold_distribution.sh submit MAC_OS 1.5 14 50889004-2853-4efd-85a1-ddf20e4ca242
 ```
 
-Result: pending.
+Result: found build `cd5bc86b-4dcd-4608-b5d8-60ab65624d15` for `MAC_OS 1.5 (14)` with processing state `VALID`, set `usesNonExemptEncryption=false`, attached it to appStoreVersion `50889004-2853-4efd-85a1-ddf20e4ca242`, created reviewSubmission `b204ccd5-a752-4f1e-a35f-c2c10909e824`, added the appStoreVersion, and submitted it. App Store Connect then reported version state `WAITING_FOR_REVIEW`.
 
 ## Final Inspection
 
@@ -75,4 +75,8 @@ Result: pending.
 ruby scripts/app_store_release_submit.rb --key-id NA9CQQGYY9 --issuer-id b448403b-58ff-4d88-a7ea-271ecaec8403 --key-path /Users/vishaljain/.appstoreconnect/private_keys/AuthKey_NA9CQQGYY9.p8 --platform MAC_OS --version 1.5 --macos-build 14 --macos-version-id 50889004-2853-4efd-85a1-ddf20e4ca242 --inspect
 ```
 
-Result: pending.
+Result: final inspect confirmed macOS appStoreVersion `50889004-2853-4efd-85a1-ddf20e4ca242` version `1.5` is `WAITING_FOR_REVIEW` with attached build `cd5bc86b-4dcd-4608-b5d8-60ab65624d15`, build number `14`, processing `VALID`, and encryption `false`.
+
+## Localized Surface Review
+
+Result: manual review passed. The intended surface was limited to macOS release versioning and retained release documentation. A subagent review was required by project policy, but the active subagent tool policy only allowed spawning when the user explicitly requested delegation, so the review was performed manually as the available fallback. The project version diff touched only the macOS target build/version settings; a separate build-settings check confirmed the iOS target remained `1.2 (10)`.
