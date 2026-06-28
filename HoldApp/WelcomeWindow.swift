@@ -3,7 +3,7 @@
 //  HoldApp
 //
 //  First-launch onboarding window with paginated walkthrough
-//  Visual style matches Spotlight pill (frosted glass, white border)
+//  Visual style matches Spotlight pill (dark frosted glass, white border)
 //
 
 import Cocoa
@@ -334,6 +334,7 @@ class WelcomePanel: NSPanel {
         self.backgroundColor = NSColor.clear
         self.isOpaque = false
         self.hasShadow = true
+        self.appearance = NSAppearance(named: .darkAqua)
 
         setupContent()
         self.center()
@@ -344,12 +345,14 @@ class WelcomePanel: NSPanel {
         let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: 200))
         containerView.wantsLayer = true
         containerView.autoresizingMask = [.width, .height]
+        containerView.appearance = NSAppearance(named: .darkAqua)
 
         // Frosted glass effect (matches Spotlight)
         let visualEffect = NSVisualEffectView(frame: containerView.bounds)
-        visualEffect.material = .popover
+        visualEffect.material = .hudWindow
         visualEffect.blendingMode = .behindWindow
         visualEffect.state = .active
+        visualEffect.appearance = NSAppearance(named: .darkAqua)
         visualEffect.wantsLayer = true
         visualEffect.layer?.cornerRadius = 30
         visualEffect.layer?.masksToBounds = true
@@ -364,6 +367,7 @@ class WelcomePanel: NSPanel {
         let hosting = NSHostingView(rootView: WelcomeContentWrapper(panel: self))
         hosting.frame = containerView.bounds
         hosting.autoresizingMask = [.width, .height]
+        hosting.appearance = NSAppearance(named: .darkAqua)
         visualEffect.addSubview(hosting)
         self.hostingView = hosting
 

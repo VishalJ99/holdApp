@@ -8,6 +8,15 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     private var visualEffectView: NSVisualEffectView!
 
     private static let inputFont = NSFont.systemFont(ofSize: 24, weight: .light)
+    private static let placeholderColor = NSColor(name: nil) { appearance in
+        let bestMatch = appearance.bestMatch(from: [.aqua, .darkAqua, .vibrantLight, .vibrantDark])
+
+        if bestMatch == .darkAqua || bestMatch == .vibrantDark {
+            return NSColor.white.withAlphaComponent(0.40)
+        }
+
+        return NSColor.black.withAlphaComponent(0.62)
+    }
 
     // MARK: - Dynamic Sizing Constants
     private let pillHorizontalPadding: CGFloat = 40  // 20pt each side
@@ -231,7 +240,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         NSAttributedString(
             string: string,
             attributes: [
-                .foregroundColor: NSColor.placeholderTextColor,
+                .foregroundColor: Self.placeholderColor,
                 .font: Self.inputFont
             ]
         )
