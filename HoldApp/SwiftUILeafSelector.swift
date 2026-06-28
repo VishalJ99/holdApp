@@ -3,7 +3,7 @@
 //  HoldApp
 //
 //  Leaf Selector using native SwiftUI List with flat list rendering
-//  Matches the Spotlight design system (ultraThinMaterial, rounded corners)
+//  Uses stable dark floating-panel styling so text stays readable over light backgrounds.
 //
 
 import SwiftUI
@@ -61,7 +61,7 @@ struct LeafSelectorView: View {
             headerView
 
             Divider()
-                .background(Color.white.opacity(0.1))
+                .background(HoldFloatingPanelStyle.divider)
 
             // Flat list
             ScrollViewReader { proxy in
@@ -97,18 +97,18 @@ struct LeafSelectorView: View {
                 }
             }
         }
-        .background(.ultraThinMaterial)
+        .background(HoldFloatingPanelBackdrop())
     }
 
     private var headerView: some View {
         HStack(spacing: 10) {
             Text("Select Leaf")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(HoldFloatingPanelStyle.secondaryText)
 
             Text("\(leaves.count)")
                 .font(.system(size: 11, weight: .medium))
-                .foregroundColor(.white.opacity(0.45))
+                .foregroundColor(HoldFloatingPanelStyle.tertiaryText)
 
             Spacer()
 
@@ -137,11 +137,11 @@ private struct LeafScopeToggle: View {
         .padding(2)
         .background(
             Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.10))
+                .fill(HoldFloatingPanelStyle.controlFill)
         )
         .overlay(
             Capsule(style: .continuous)
-                .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                .stroke(HoldFloatingPanelStyle.border, lineWidth: 1)
         )
     }
 
@@ -149,17 +149,17 @@ private struct LeafScopeToggle: View {
         Button(action: action) {
             Text(title)
                 .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.62))
+                .foregroundColor(isSelected ? HoldFloatingPanelStyle.primaryText : HoldFloatingPanelStyle.secondaryText)
                 .lineLimit(1)
                 .padding(.horizontal, 8)
                 .frame(height: 24)
                 .background(
                     Capsule(style: .continuous)
-                        .fill(isSelected ? Color.white.opacity(0.24) : Color.clear)
+                        .fill(isSelected ? HoldFloatingPanelStyle.selectedControlFill : Color.clear)
                 )
                 .overlay(
                     Capsule(style: .continuous)
-                        .stroke(isSelected ? Color.white.opacity(0.32) : Color.clear, lineWidth: 1)
+                        .stroke(isSelected ? HoldFloatingPanelStyle.selectedControlStroke : Color.clear, lineWidth: 1)
                 )
         }
         .buttonStyle(.plain)
@@ -180,20 +180,20 @@ struct LeafRowView: View {
             // Bullet icon
             Text("●")
                 .font(.system(size: 6))
-                .foregroundColor(isSelected ? .white : .white.opacity(0.5))
+                .foregroundColor(isSelected ? HoldFloatingPanelStyle.primaryText : HoldFloatingPanelStyle.tertiaryText)
                 .frame(width: 14)
 
             // Text
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.text)
                     .font(.system(size: 14, weight: (item.isCurrent || isSelected) ? .semibold : .regular))
-                    .foregroundColor((item.isCurrent || isSelected) ? .white : .white.opacity(0.7))
+                    .foregroundColor((item.isCurrent || isSelected) ? HoldFloatingPanelStyle.primaryText : HoldFloatingPanelStyle.secondaryText)
                     .lineLimit(1)
 
                 if showsRootContext, let rootText = item.rootText {
                     Text(item.isCurrentRoot ? "current root: \(rootText)" : "root: \(rootText)")
                         .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.white.opacity(0.42))
+                        .foregroundColor(HoldFloatingPanelStyle.tertiaryText)
                         .lineLimit(1)
                 }
             }
@@ -204,10 +204,10 @@ struct LeafRowView: View {
             if item.isCurrent {
                 Text("current")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(HoldFloatingPanelStyle.tertiaryText)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.1))
+                    .background(HoldFloatingPanelStyle.controlFill)
                     .cornerRadius(4)
             }
         }
@@ -215,7 +215,7 @@ struct LeafRowView: View {
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.white.opacity(0.15) : Color.clear)
+                .fill(isSelected ? HoldFloatingPanelStyle.rowHighlight : Color.clear)
         )
         .contentShape(Rectangle())
         .id(item.id)
@@ -300,8 +300,9 @@ struct LeafSelectorContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(HoldFloatingPanelStyle.border, lineWidth: 1)
         )
+        .environment(\.colorScheme, .dark)
     }
 }
 
@@ -332,9 +333,7 @@ class SwiftUILeafSelectorPanel: NSPanel {
         self.isMovableByWindowBackground = true
         self.hidesOnDeactivate = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.backgroundColor = .clear
-        self.hasShadow = true
-        self.isOpaque = false
+        HoldFloatingPanelStyle.configurePanel(self)
 
         setupHostingView()
         setupKeyboardMonitor()
@@ -402,13 +401,11 @@ class SwiftUILeafSelectorPanel: NSPanel {
     private func setupHostingView() {
         let contentView = LeafSelectorContentView(model: contentModel)
         hostingView = DraggableLeafSelectorHostingView(rootView: contentView)
+        HoldFloatingPanelStyle.configureHostingView(hostingView)
         hostingView.frame = self.contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]
 
-        // Round corners
-        self.contentView?.wantsLayer = true
-        self.contentView?.layer?.cornerRadius = 16
-        self.contentView?.layer?.masksToBounds = true
+        HoldFloatingPanelStyle.configureRoundedContentView(self.contentView)
 
         self.contentView?.addSubview(hostingView)
 

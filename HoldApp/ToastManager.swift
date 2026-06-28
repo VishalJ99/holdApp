@@ -3,7 +3,7 @@
 //  HoldApp
 //
 //  Displays temporary toast notifications with frosted glass aesthetic
-//  Matches app's visual language: ultraThinMaterial, white border, SF Symbols
+//  Matches app's dark floating-panel visual language with stable contrast.
 //
 
 import Cocoa
@@ -79,29 +79,26 @@ class ToastManager {
         )
 
         panel.level = .floating
-        panel.isOpaque = false
-        panel.backgroundColor = .clear
-        panel.hasShadow = true
+        HoldFloatingPanelStyle.configurePanel(panel)
 
         // Create container with visual effect (frosted glass)
         let containerView = NSView(frame: panel.contentRect(forFrameRect: panel.frame))
         containerView.wantsLayer = true
+        containerView.appearance = HoldFloatingPanelStyle.darkAppearance
 
         // Frosted glass effect
         let visualEffectView = NSVisualEffectView(frame: containerView.bounds)
-        visualEffectView.material = .popover
-        visualEffectView.blendingMode = .behindWindow
-        visualEffectView.state = .active
-        visualEffectView.wantsLayer = true
-        visualEffectView.layer?.cornerRadius = 12
-        visualEffectView.layer?.masksToBounds = true
+        HoldFloatingPanelStyle.configureDarkVisualEffect(
+            visualEffectView,
+            cornerRadius: 12
+        )
 
-        // Border overlay (white 0.2 alpha)
+        // Border overlay
         let borderLayer = CALayer()
         borderLayer.frame = visualEffectView.bounds
         borderLayer.cornerRadius = 12
         borderLayer.borderWidth = 1.0
-        borderLayer.borderColor = NSColor.white.withAlphaComponent(0.2).cgColor
+        borderLayer.borderColor = HoldFloatingPanelStyle.appKitBorderColor.cgColor
         visualEffectView.layer?.addSublayer(borderLayer)
 
         // Red tint overlay for errors (8% opacity)
@@ -122,11 +119,11 @@ class ToastManager {
 
         let iconView = NSImageView()
         iconView.image = iconImage
-        iconView.contentTintColor = NSColor.white.withAlphaComponent(0.8)
+        iconView.contentTintColor = NSColor.white.withAlphaComponent(0.9)
 
         // Create label
         let label = NSTextField(labelWithString: truncatedMessage)
-        label.textColor = NSColor.white.withAlphaComponent(0.9)
+        label.textColor = NSColor.white.withAlphaComponent(0.94)
         label.font = NSFont.systemFont(ofSize: 13, weight: .regular)
         label.alignment = .left
         label.lineBreakMode = .byTruncatingTail

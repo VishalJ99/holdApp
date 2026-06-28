@@ -89,7 +89,7 @@ struct OutlineParentSelectorView: View {
             headerView
 
             Divider()
-                .background(Color.white.opacity(0.1))
+                .background(HoldFloatingPanelStyle.divider)
 
             // Tree list
             ScrollViewReader { proxy in
@@ -110,14 +110,14 @@ struct OutlineParentSelectorView: View {
                 }
             }
         }
-        .background(.ultraThinMaterial)
+        .background(HoldFloatingPanelBackdrop())
     }
 
     private var headerView: some View {
         HStack(spacing: 8) {
             Text("Select Parent")
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.6))
+                .foregroundColor(HoldFloatingPanelStyle.secondaryText)
 
             Spacer()
         }
@@ -158,11 +158,11 @@ struct TreeRowRecursive: View {
                 if item.isRoot {
                     Text("▼")
                         .font(.system(size: 10, weight: .regular))
-                        .foregroundColor(.white)
+                        .foregroundColor(HoldFloatingPanelStyle.primaryText)
                 } else {
                     Text("●")
                         .font(.system(size: 6))
-                        .foregroundColor(isSelected ? .white : .white.opacity(0.5))
+                        .foregroundColor(isSelected ? HoldFloatingPanelStyle.primaryText : HoldFloatingPanelStyle.tertiaryText)
                 }
             }
             .frame(width: 14)
@@ -170,7 +170,7 @@ struct TreeRowRecursive: View {
             // Text
             Text(item.text)
                 .font(.system(size: 14, weight: (item.isCurrent || isSelected) ? .semibold : .regular))
-                .foregroundColor((item.isCurrent || isSelected) ? .white : .white.opacity(0.7))
+                .foregroundColor((item.isCurrent || isSelected) ? HoldFloatingPanelStyle.primaryText : HoldFloatingPanelStyle.secondaryText)
                 .lineLimit(1)
 
             Spacer()
@@ -179,10 +179,10 @@ struct TreeRowRecursive: View {
             if item.isCurrent {
                 Text("current")
                     .font(.system(size: 10))
-                    .foregroundColor(.white.opacity(0.4))
+                    .foregroundColor(HoldFloatingPanelStyle.tertiaryText)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
-                    .background(Color.white.opacity(0.1))
+                    .background(HoldFloatingPanelStyle.controlFill)
                     .cornerRadius(4)
             }
         }
@@ -190,7 +190,7 @@ struct TreeRowRecursive: View {
         .padding(.horizontal, 8)
         .background(
             RoundedRectangle(cornerRadius: 6)
-                .fill(isSelected ? Color.white.opacity(0.15) : Color.clear)
+                .fill(isSelected ? HoldFloatingPanelStyle.rowHighlight : Color.clear)
         )
         .contentShape(Rectangle())
         .id(item.id)
@@ -236,9 +236,7 @@ class OutlineParentSelectorPanel: NSPanel {
         self.isMovableByWindowBackground = false
         self.hidesOnDeactivate = false
         self.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        self.backgroundColor = .clear
-        self.hasShadow = true
-        self.isOpaque = false
+        HoldFloatingPanelStyle.configurePanel(self)
 
         setupHostingView()
         setupKeyboardMonitor()
@@ -307,13 +305,11 @@ class OutlineParentSelectorPanel: NSPanel {
     private func setupHostingView() {
         let contentView = OutlineParentSelectorContentView(model: contentModel)
         hostingView = NSHostingView(rootView: contentView)
+        HoldFloatingPanelStyle.configureHostingView(hostingView)
         hostingView.frame = self.contentView?.bounds ?? .zero
         hostingView.autoresizingMask = [.width, .height]
 
-        // Round corners
-        self.contentView?.wantsLayer = true
-        self.contentView?.layer?.cornerRadius = 12
-        self.contentView?.layer?.masksToBounds = true
+        HoldFloatingPanelStyle.configureRoundedContentView(self.contentView)
 
         self.contentView?.addSubview(hostingView)
 
@@ -412,8 +408,9 @@ struct OutlineParentSelectorContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                .stroke(HoldFloatingPanelStyle.border, lineWidth: 1)
         )
+        .environment(\.colorScheme, .dark)
     }
 }
 
