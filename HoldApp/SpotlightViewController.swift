@@ -7,6 +7,8 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     private var pencilIconView: NSImageView!
     private var visualEffectView: NSVisualEffectView!
 
+    private static let inputFont = NSFont.systemFont(ofSize: 24, weight: .light)
+
     // MARK: - Dynamic Sizing Constants
     private let pillHorizontalPadding: CGFloat = 40  // 20pt each side
     private let pillVerticalPadding: CGFloat = 24    // 12pt top/bottom
@@ -121,7 +123,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         // Add "Editing" Label (Centered in flap)
         let label = NSTextField(labelWithString: "Editing")
         label.font = NSFont.systemFont(ofSize: 13, weight: .medium)
-        label.textColor = NSColor.white.withAlphaComponent(0.9)
+        label.textColor = .secondaryLabelColor
         label.sizeToFit()
         
         // Center label in flap
@@ -164,7 +166,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         let config = NSImage.SymbolConfiguration(pointSize: 22, weight: .semibold)
         pencilIconView.image = NSImage(systemSymbolName: "pencil", accessibilityDescription: "Edit")?.withSymbolConfiguration(config)
 
-        pencilIconView.contentTintColor = NSColor.white.withAlphaComponent(0.9)
+        pencilIconView.contentTintColor = .labelColor
         pencilIconView.isHidden = true // Hidden by default
         visualEffectView.addSubview(pencilIconView)  // Add to pill, not container
 
@@ -177,15 +179,9 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         let fixedTextFieldHeight = maxPillHeight - pillVerticalPadding
         let textFieldY = minPillHeight - topPadding - fixedTextFieldHeight
         textField = SubmitTextField(frame: NSRect(x: 20, y: textFieldY, width: 560, height: fixedTextFieldHeight))
-        textField.placeholderAttributedString = NSAttributedString(
-            string: "Hold...",
-            attributes: [
-                .foregroundColor: NSColor.white.withAlphaComponent(0.4),
-                .font: NSFont.systemFont(ofSize: 24, weight: .light)
-            ]
-        )
-        textField.font = NSFont.systemFont(ofSize: 24, weight: .light)
-        textField.textColor = .white
+        textField.placeholderAttributedString = placeholderText("Hold...")
+        textField.font = Self.inputFont
+        textField.textColor = .textColor
         textField.isBordered = false
         textField.focusRingType = .none
         textField.backgroundColor = .clear
@@ -229,6 +225,16 @@ class SpotlightViewController: NSViewController, TaskInputUI {
 
         // Notify AppDelegate to open parent selector
         onParentSelectorRequested?(currentText)
+    }
+
+    private func placeholderText(_ string: String) -> NSAttributedString {
+        NSAttributedString(
+            string: string,
+            attributes: [
+                .foregroundColor: NSColor.placeholderTextColor,
+                .font: Self.inputFont
+            ]
+        )
     }
 
     // MARK: - Dynamic Height Calculation
@@ -467,13 +473,7 @@ extension SpotlightViewController: NSTextFieldDelegate {
             textField.window?.makeFirstResponder(nil)
 
             // Set placeholder BEFORE stringValue (setting placeholder clears stringValue)
-            textField.placeholderAttributedString = NSAttributedString(
-                string: "Editing task... (Press Enter to save)",
-                attributes: [
-                    .foregroundColor: NSColor.white.withAlphaComponent(0.4),
-                    .font: NSFont.systemFont(ofSize: 24, weight: .light)
-                ]
-            )
+            textField.placeholderAttributedString = placeholderText("Editing task... (Press Enter to save)")
 
             textField.stringValue = current.text
             isEditMode = true
@@ -495,13 +495,7 @@ extension SpotlightViewController: NSTextFieldDelegate {
         editingTaskId = nil
 
         // Set placeholder before stringValue for consistency
-        textField.placeholderAttributedString = NSAttributedString(
-            string: "Hold...",
-            attributes: [
-                .foregroundColor: NSColor.white.withAlphaComponent(0.4),
-                .font: NSFont.systemFont(ofSize: 24, weight: .light)
-            ]
-        )
+        textField.placeholderAttributedString = placeholderText("Hold...")
         textField.stringValue = ""
 
         print("🔄 [Edit Mode] Reset")
@@ -533,7 +527,9 @@ extension SpotlightViewController: NSTextFieldDelegate {
     }
     func control(_ control: NSControl, textShouldBeginEditing fieldEditor: NSText) -> Bool {
         if let textView = fieldEditor as? NSTextView {
-            textView.insertionPointColor = .white
+            textView.textColor = .textColor
+            textView.insertionPointColor = .textColor
+            textView.typingAttributes[.foregroundColor] = NSColor.textColor
         }
         return true
     }
