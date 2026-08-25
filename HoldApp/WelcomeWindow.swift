@@ -45,7 +45,11 @@ struct WelcomeView: View {
         return page == 2 ? largeHeight : smallHeight
     }
 
-    let pages: [OnboardingPage] = [
+    let pages: [OnboardingPage] = {
+        let modifiers = EntryModifierPreferencesManager.shared.loadModifiers()
+        let siblingAndSwitch = modifiers.siblingModifier.union(modifiers.switchModifier)
+
+        return [
         // Page 1: Philosophy
         OnboardingPage(
             title: "Hold frees your mind.",
@@ -73,12 +77,12 @@ struct WelcomeView: View {
                 .command(cmd: "Enter", description: "creates a new independent task (root)"),
                 .spacer,
                 .text("To maintain a relationship:"),
-                .command(cmd: "Shift+Enter", description: "Child of current"),
-                .command(cmd: "Cmd+Enter", description: "Sibling of current"),
-                .command(cmd: "Cmd+Shift+Enter", description: "New parent of current"),
+                .command(cmd: "\(modifiers.childModifier.displayName)+Enter", description: "Child of current"),
+                .command(cmd: "\(modifiers.siblingModifier.displayName)+Enter", description: "Sibling of current"),
+                .command(cmd: "\(modifiers.newParentModifier.displayName)+Enter", description: "New parent of current"),
                 .spacer,
-                .text("Hold Ctrl to also switch,"),
-                .command(cmd: "Ctrl+Cmd+Enter", description: "Sibling + switch"),
+                .text("Add \(modifiers.switchModifier.displayName) to also switch,"),
+                .command(cmd: "\(siblingAndSwitch.displayName)+Enter", description: "Sibling + switch"),
                 .spacer,
                 .text("To choose a specific task as parent:"),
                 .command(cmd: "Cmd+P", description: "opens parent selector")
@@ -133,7 +137,8 @@ struct WelcomeView: View {
             title: "Your iPhone is waiting.",
             isLastPage: true
         )
-    ]
+        ]
+    }()
 
     var body: some View {
         VStack(spacing: 0) {

@@ -415,6 +415,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         // NORMAL MODE: Load modifier preferences and detect which are pressed
         let prefs = EntryModifierPreferencesManager.shared.loadModifiers()
 
+        let isNewParentPressed = modifiers == prefs.newParentModifier.nsEventFlags
         let isChildPressed = modifiers.contains(prefs.childModifier.nsEventFlags)
         let isSiblingPressed = modifiers.contains(prefs.siblingModifier.nsEventFlags)
         let isSwitchPressed = modifiers.contains(prefs.switchModifier.nsEventFlags)
@@ -422,8 +423,8 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         // Determine task creation type using compositional logic
         // Check combinations first, then individual modifiers
         let creationType: TaskCreationType
-        if isChildPressed && isSiblingPressed && !isSwitchPressed {
-            // Child + Sibling (Cmd+Shift) - swap: new task becomes parent of current
+        if isNewParentPressed {
+            // Configured exact combination - new task becomes parent of current
             creationType = .swap
         } else if isChildPressed {
             // Child modifier - create child and auto-switch

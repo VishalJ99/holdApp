@@ -9,6 +9,8 @@ class EntryModifierViewController: NSViewController {
     private var childDropdown: NSPopUpButton!
     private var siblingLabel: NSTextField!
     private var siblingDropdown: NSPopUpButton!
+    private var newParentLabel: NSTextField!
+    private var newParentDropdown: NSPopUpButton!
     private var switchLabel: NSTextField!
     private var switchDropdown: NSPopUpButton!
 
@@ -23,10 +25,17 @@ class EntryModifierViewController: NSViewController {
     private var hasUnsavedChanges = false
 
     // Modifier options
-    private let modifierOptions: [(String, EntryModifierPreferences.ModifierFlags)] = [
+    private let singleModifierOptions: [(String, EntryModifierPreferences.ModifierFlags)] = [
         ("Shift", .shift),
         ("Cmd", .command),
         ("Ctrl", .control)
+    ]
+
+    private let newParentModifierOptions: [(String, EntryModifierPreferences.ModifierFlags)] = [
+        ("Cmd + Shift", .commandShift),
+        ("Cmd + Ctrl", .commandControl),
+        ("Shift + Ctrl", .shiftControl),
+        ("Cmd + Shift + Ctrl", .commandShiftControl)
     ]
 
     init() {
@@ -65,7 +74,7 @@ class EntryModifierViewController: NSViewController {
         view.addSubview(childLabel)
 
         childDropdown = createDropdown()
-        populateDropdown(childDropdown, selected: editedPreferences.childModifier)
+        populateDropdown(childDropdown, options: singleModifierOptions, selected: editedPreferences.childModifier)
         childDropdown.target = self
         childDropdown.action = #selector(modifierChanged)
         view.addSubview(childDropdown)
@@ -78,10 +87,23 @@ class EntryModifierViewController: NSViewController {
         view.addSubview(siblingLabel)
 
         siblingDropdown = createDropdown()
-        populateDropdown(siblingDropdown, selected: editedPreferences.siblingModifier)
+        populateDropdown(siblingDropdown, options: singleModifierOptions, selected: editedPreferences.siblingModifier)
         siblingDropdown.target = self
         siblingDropdown.action = #selector(modifierChanged)
         view.addSubview(siblingDropdown)
+
+        // New Parent row
+        newParentLabel = NSTextField(labelWithString: "New Parent:")
+        newParentLabel.font = .systemFont(ofSize: 13)
+        newParentLabel.alignment = .right
+        newParentLabel.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(newParentLabel)
+
+        newParentDropdown = createDropdown()
+        populateDropdown(newParentDropdown, options: newParentModifierOptions, selected: editedPreferences.newParentModifier)
+        newParentDropdown.target = self
+        newParentDropdown.action = #selector(modifierChanged)
+        view.addSubview(newParentDropdown)
 
         // Switch to Task row
         switchLabel = NSTextField(labelWithString: "Switch to Task:")
@@ -91,7 +113,7 @@ class EntryModifierViewController: NSViewController {
         view.addSubview(switchLabel)
 
         switchDropdown = createDropdown()
-        populateDropdown(switchDropdown, selected: editedPreferences.switchModifier)
+        populateDropdown(switchDropdown, options: singleModifierOptions, selected: editedPreferences.switchModifier)
         switchDropdown.target = self
         switchDropdown.action = #selector(modifierChanged)
         view.addSubview(switchDropdown)
@@ -138,8 +160,17 @@ class EntryModifierViewController: NSViewController {
             siblingDropdown.leadingAnchor.constraint(equalTo: siblingLabel.trailingAnchor, constant: 20),
             siblingDropdown.widthAnchor.constraint(equalToConstant: 150),
 
+            // New Parent row
+            newParentLabel.topAnchor.constraint(equalTo: siblingLabel.bottomAnchor, constant: 20),
+            newParentLabel.leadingAnchor.constraint(equalTo: childLabel.leadingAnchor),
+            newParentLabel.widthAnchor.constraint(equalToConstant: 150),
+
+            newParentDropdown.centerYAnchor.constraint(equalTo: newParentLabel.centerYAnchor),
+            newParentDropdown.leadingAnchor.constraint(equalTo: newParentLabel.trailingAnchor, constant: 20),
+            newParentDropdown.widthAnchor.constraint(equalToConstant: 180),
+
             // Switch to Task row
-            switchLabel.topAnchor.constraint(equalTo: siblingLabel.bottomAnchor, constant: 20),
+            switchLabel.topAnchor.constraint(equalTo: newParentLabel.bottomAnchor, constant: 20),
             switchLabel.leadingAnchor.constraint(equalTo: childLabel.leadingAnchor),
             switchLabel.widthAnchor.constraint(equalToConstant: 150),
 
@@ -165,10 +196,14 @@ class EntryModifierViewController: NSViewController {
         return dropdown
     }
 
-    private func populateDropdown(_ dropdown: NSPopUpButton, selected: EntryModifierPreferences.ModifierFlags) {
+    private func populateDropdown(
+        _ dropdown: NSPopUpButton,
+        options: [(String, EntryModifierPreferences.ModifierFlags)],
+        selected: EntryModifierPreferences.ModifierFlags
+    ) {
         dropdown.removeAllItems()
 
-        for (name, modifier) in modifierOptions {
+        for (name, modifier) in options {
             dropdown.addItem(withTitle: name)
 
             if modifier == selected {
@@ -181,16 +216,24 @@ class EntryModifierViewController: NSViewController {
 
     @objc private func modifierChanged() {
         // Update edited preferences based on dropdown selections (no validation yet)
-        if let childIndex = childDropdown.indexOfSelectedItem as Int?, childIndex >= 0, childIndex < modifierOptions.count {
-            editedPreferences.childModifier = modifierOptions[childIndex].1
+        let childIndex = childDropdown.indexOfSelectedItem
+        if childIndex >= 0, childIndex < singleModifierOptions.count {
+            editedPreferences.childModifier = singleModifierOptions[childIndex].1
         }
 
-        if let siblingIndex = siblingDropdown.indexOfSelectedItem as Int?, siblingIndex >= 0, siblingIndex < modifierOptions.count {
-            editedPreferences.siblingModifier = modifierOptions[siblingIndex].1
+        let siblingIndex = siblingDropdown.indexOfSelectedItem
+        if siblingIndex >= 0, siblingIndex < singleModifierOptions.count {
+            editedPreferences.siblingModifier = singleModifierOptions[siblingIndex].1
         }
 
-        if let switchIndex = switchDropdown.indexOfSelectedItem as Int?, switchIndex >= 0, switchIndex < modifierOptions.count {
-            editedPreferences.switchModifier = modifierOptions[switchIndex].1
+        let newParentIndex = newParentDropdown.indexOfSelectedItem
+        if newParentIndex >= 0, newParentIndex < newParentModifierOptions.count {
+            editedPreferences.newParentModifier = newParentModifierOptions[newParentIndex].1
+        }
+
+        let switchIndex = switchDropdown.indexOfSelectedItem
+        if switchIndex >= 0, switchIndex < singleModifierOptions.count {
+            editedPreferences.switchModifier = singleModifierOptions[switchIndex].1
         }
 
         // Mark as changed and enable save button (validation happens on save)
@@ -212,6 +255,13 @@ class EntryModifierViewController: NSViewController {
                     throw EntryModifierPreferencesManager.ValidationError.duplicateModifier(action: "multiple actions")
                 }
             }
+        }
+
+        let siblingAndSwitch = editedPreferences.siblingModifier.union(editedPreferences.switchModifier)
+        if editedPreferences.newParentModifier == siblingAndSwitch {
+            throw EntryModifierPreferencesManager.ValidationError.conflictingCombination(
+                action: "Sibling + Switch"
+            )
         }
     }
 
@@ -261,7 +311,7 @@ class EntryModifierViewController: NSViewController {
     @objc private func restoreDefaults() {
         let alert = NSAlert()
         alert.messageText = "Restore Default Modifiers?"
-        alert.informativeText = "This will reset entry modifiers to:\n• Child: Shift\n• Sibling: Cmd\n• Switch: Ctrl"
+        alert.informativeText = "This will reset entry modifiers to:\n• Child: Shift\n• Sibling: Cmd\n• New Parent: Cmd + Shift\n• Switch: Ctrl"
         alert.addButton(withTitle: "Restore")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
@@ -278,9 +328,10 @@ class EntryModifierViewController: NSViewController {
     private func reloadFromPreferences() {
         editedPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
 
-        populateDropdown(childDropdown, selected: editedPreferences.childModifier)
-        populateDropdown(siblingDropdown, selected: editedPreferences.siblingModifier)
-        populateDropdown(switchDropdown, selected: editedPreferences.switchModifier)
+        populateDropdown(childDropdown, options: singleModifierOptions, selected: editedPreferences.childModifier)
+        populateDropdown(siblingDropdown, options: singleModifierOptions, selected: editedPreferences.siblingModifier)
+        populateDropdown(newParentDropdown, options: newParentModifierOptions, selected: editedPreferences.newParentModifier)
+        populateDropdown(switchDropdown, options: singleModifierOptions, selected: editedPreferences.switchModifier)
 
         hasUnsavedChanges = false
         saveButton.isEnabled = false

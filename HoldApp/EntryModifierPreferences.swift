@@ -8,6 +8,7 @@ struct EntryModifierPreferences: Codable {
     var childModifier: ModifierFlags      // Default: Shift - creates child + auto-switches
     var siblingModifier: ModifierFlags    // Default: Cmd - creates sibling
     var switchModifier: ModifierFlags     // Default: Ctrl - switches to created task
+    var newParentModifier: ModifierFlags  // Default: Cmd+Shift - creates a new parent of current
 
     /// Codable wrapper for NSEvent.ModifierFlags
     struct ModifierFlags: Codable, Equatable {
@@ -25,7 +26,23 @@ struct EntryModifierPreferences: Codable {
         static let shift = ModifierFlags(.shift)
         static let command = ModifierFlags(.command)
         static let control = ModifierFlags(.control)
+        static let commandShift = ModifierFlags([.command, .shift])
+        static let commandControl = ModifierFlags([.command, .control])
+        static let shiftControl = ModifierFlags([.shift, .control])
+        static let commandShiftControl = ModifierFlags([.command, .shift, .control])
         static let none = ModifierFlags([])
+
+        func union(_ other: ModifierFlags) -> ModifierFlags {
+            ModifierFlags(nsEventFlags.union(other.nsEventFlags))
+        }
+
+        var displayName: String {
+            var names: [String] = []
+            if nsEventFlags.contains(.command) { names.append("Cmd") }
+            if nsEventFlags.contains(.shift) { names.append("Shift") }
+            if nsEventFlags.contains(.control) { names.append("Ctrl") }
+            return names.joined(separator: "+")
+        }
     }
 
     /// Default preferences matching current hardcoded behavior
@@ -33,8 +50,37 @@ struct EntryModifierPreferences: Codable {
         return EntryModifierPreferences(
             childModifier: .shift,
             siblingModifier: .command,
-            switchModifier: .control
+            switchModifier: .control,
+            newParentModifier: .commandShift
         )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case childModifier
+        case siblingModifier
+        case switchModifier
+        case newParentModifier
+    }
+
+    init(
+        childModifier: ModifierFlags,
+        siblingModifier: ModifierFlags,
+        switchModifier: ModifierFlags,
+        newParentModifier: ModifierFlags
+    ) {
+        self.childModifier = childModifier
+        self.siblingModifier = siblingModifier
+        self.switchModifier = switchModifier
+        self.newParentModifier = newParentModifier
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        childModifier = try container.decode(ModifierFlags.self, forKey: .childModifier)
+        siblingModifier = try container.decode(ModifierFlags.self, forKey: .siblingModifier)
+        switchModifier = try container.decode(ModifierFlags.self, forKey: .switchModifier)
+        newParentModifier = try container.decodeIfPresent(ModifierFlags.self, forKey: .newParentModifier)
+            ?? childModifier.union(siblingModifier)
     }
 }
 
@@ -94,6 +140,7 @@ class EntryModifierPreferencesManager {
     enum ValidationError: Error, LocalizedError {
         case optionNotSupported
         case duplicateModifier(action: String)
+        case conflictingCombination(action: String)
 
         var errorDescription: String? {
             switch self {
@@ -101,6 +148,8 @@ class EntryModifierPreferencesManager {
                 return "Option key is not supported for entry modifiers (macOS limitation)"
             case .duplicateModifier(let action):
                 return "This modifier is already assigned to '\(action)'"
+            case .conflictingCombination(let action):
+                return "This combination is already assigned to '\(action)'"
             }
         }
     }
