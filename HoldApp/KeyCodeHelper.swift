@@ -100,6 +100,26 @@ class KeyCodeHelper {
 
     // MARK: - Modifier Formatting
 
+    /// Return modifier symbols in standard macOS order.
+    private static func modifierSymbolComponents(_ modifiers: UInt32) -> [String] {
+        var components: [String] = []
+
+        if (modifiers & UInt32(controlKey)) != 0 {
+            components.append("⌃")
+        }
+        if (modifiers & UInt32(optionKey)) != 0 {
+            components.append("⌥")
+        }
+        if (modifiers & UInt32(shiftKey)) != 0 {
+            components.append("⇧")
+        }
+        if (modifiers & UInt32(cmdKey)) != 0 {
+            components.append("⌘")
+        }
+
+        return components
+    }
+
     /// Convert Carbon modifier flags to NSEvent modifier flags
     /// - Parameter carbonModifiers: Carbon modifier flags (cmdKey, shiftKey, etc.)
     /// - Returns: NSEvent.ModifierFlags
@@ -126,23 +146,7 @@ class KeyCodeHelper {
     /// - Parameter modifiers: Carbon modifier flags
     /// - Returns: String with modifier symbols
     static func modifierSymbols(_ modifiers: UInt32) -> String {
-        var result = ""
-
-        // Order: Control, Option, Shift, Command (standard macOS order)
-        if (modifiers & UInt32(controlKey)) != 0 {
-            result += "⌃"
-        }
-        if (modifiers & UInt32(optionKey)) != 0 {
-            result += "⌥"
-        }
-        if (modifiers & UInt32(shiftKey)) != 0 {
-            result += "⇧"
-        }
-        if (modifiers & UInt32(cmdKey)) != 0 {
-            result += "⌘"
-        }
-
-        return result
+        return modifierSymbolComponents(modifiers).joined()
     }
 
     /// Format modifiers as text (e.g., "Cmd+Shift+Ctrl")
@@ -170,15 +174,14 @@ class KeyCodeHelper {
 
     // MARK: - Full Hotkey Formatting
 
-    /// Format a full hotkey binding as symbols (e.g., "⌘⇧Space")
+    /// Format a full hotkey binding as legible, separated symbols (e.g., "⇧  ⌘  Space")
     /// - Parameters:
     ///   - keyCode: The key code
     ///   - modifiers: The modifier flags
-    /// - Returns: Formatted string like "⌘⇧Space"
+    /// - Returns: Formatted string like "⇧  ⌘  Space"
     static func formatHotkey(keyCode: UInt32, modifiers: UInt32) -> String {
-        let modSymbols = modifierSymbols(modifiers)
         let keyName = keyCodeToString(keyCode)
-        return modSymbols + keyName
+        return (modifierSymbolComponents(modifiers) + [keyName]).joined(separator: "  ")
     }
 
     /// Format a full hotkey binding as text (e.g., "Cmd+Shift+Space")
