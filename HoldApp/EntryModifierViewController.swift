@@ -1,45 +1,37 @@
 import Cocoa
-import AppKit
+import Carbon
 
-/// View controller for entry modifier preferences (Spotlight modifiers)
-class EntryModifierViewController: NSViewController {
+/// Preferences for the chords used when submitting text from Spotlight.
+final class EntryModifierViewController: NSViewController {
+    private struct ChordItem {
+        let title: String
+        let keyPath: WritableKeyPath<EntryModifierPreferences, EntryChord>
+    }
 
-    // UI Elements
-    private var childLabel: NSTextField!
-    private var childDropdown: NSPopUpButton!
-    private var siblingLabel: NSTextField!
-    private var siblingDropdown: NSPopUpButton!
-    private var newParentLabel: NSTextField!
-    private var newParentDropdown: NSPopUpButton!
-    private var switchLabel: NSTextField!
-    private var switchDropdown: NSPopUpButton!
+    private let items: [ChordItem] = [
+        ChordItem(title: "Create Child", keyPath: \.childChord),
+        ChordItem(title: "Create Sibling", keyPath: \.siblingChord),
+        ChordItem(title: "New Parent", keyPath: \.newParentChord),
+        ChordItem(title: "Switch to Task", keyPath: \.switchChord)
+    ]
 
-    private var saveButton: NSButton!
-    private var cancelButton: NSButton!
-    private var restoreDefaultsButton: NSButton!
-
+    private var chordLabels: [NSTextField] = []
+    private var recordButtons: [NSButton] = []
     private var instructionLabel: NSTextField!
+    private var saveButton: NSButton!
 
-    // Data
     private var editedPreferences: EntryModifierPreferences
     private var hasUnsavedChanges = false
 
-    // Modifier options
-    private let singleModifierOptions: [(String, EntryModifierPreferences.ModifierFlags)] = [
-        ("Shift", .shift),
-        ("Cmd", .command),
-        ("Ctrl", .control)
-    ]
+    private var recordingIndex: Int?
+    private var recordingModifiers: NSEvent.ModifierFlags = []
+    private var recordingHeldKeyCodes: Set<UInt16> = []
+    private var recordingMonitor: Any?
 
-    private let newParentModifierOptions: [(String, EntryModifierPreferences.ModifierFlags)] = [
-        ("Cmd + Shift", .commandShift),
-        ("Cmd + Ctrl", .commandControl),
-        ("Shift + Ctrl", .shiftControl),
-        ("Cmd + Shift + Ctrl", .commandShiftControl)
-    ]
+    private let defaultInstructions = "Click Record, hold modifiers or non-text keys, then press Enter. Letters, numbers, punctuation, and Space are not allowed."
 
     init() {
-        self.editedPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
+        editedPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
         super.init(nibName: nil, bundle: nil)
     }
 
@@ -47,138 +39,97 @@ class EntryModifierViewController: NSViewController {
         fatalError("init(coder:) has not been implemented")
     }
 
+    deinit {
+        stopRecording()
+    }
+
     override func loadView() {
-        self.view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
+        view = NSView(frame: NSRect(x: 0, y: 0, width: 600, height: 400))
     }
 
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        refreshChordRows()
+    }
+
+    override func viewWillDisappear() {
+        stopRecording()
+        super.viewWillDisappear()
     }
 
     private func setupUI() {
-        // Instruction label at top
-        instructionLabel = NSTextField(labelWithString: "Customize which modifier keys control task creation in Spotlight.\nAll modifiers are used with the Enter key.")
+        instructionLabel = NSTextField(wrappingLabelWithString: defaultInstructions)
         instructionLabel.font = .systemFont(ofSize: 11)
         instructionLabel.textColor = .secondaryLabelColor
-        instructionLabel.lineBreakMode = .byWordWrapping
         instructionLabel.maximumNumberOfLines = 2
         instructionLabel.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(instructionLabel)
 
-        // Create Child row
-        childLabel = NSTextField(labelWithString: "Create Child:")
-        childLabel.font = .systemFont(ofSize: 13)
-        childLabel.alignment = .right
-        childLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(childLabel)
+        let rowStack = NSStackView()
+        rowStack.orientation = .vertical
+        rowStack.alignment = .leading
+        rowStack.spacing = 14
+        rowStack.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(rowStack)
 
-        childDropdown = createDropdown()
-        populateDropdown(childDropdown, options: singleModifierOptions, selected: editedPreferences.childModifier)
-        childDropdown.target = self
-        childDropdown.action = #selector(modifierChanged)
-        view.addSubview(childDropdown)
+        for (index, item) in items.enumerated() {
+            let actionLabel = NSTextField(labelWithString: item.title)
+            actionLabel.font = .systemFont(ofSize: 13, weight: .medium)
+            actionLabel.alignment = .right
+            actionLabel.setContentHuggingPriority(.required, for: .horizontal)
+            actionLabel.widthAnchor.constraint(equalToConstant: 145).isActive = true
 
-        // Create Sibling row
-        siblingLabel = NSTextField(labelWithString: "Create Sibling:")
-        siblingLabel.font = .systemFont(ofSize: 13)
-        siblingLabel.alignment = .right
-        siblingLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(siblingLabel)
+            let chordLabel = NSTextField(labelWithString: "")
+            chordLabel.font = .monospacedSystemFont(ofSize: 13, weight: .regular)
+            chordLabel.textColor = .labelColor
+            chordLabel.lineBreakMode = .byTruncatingMiddle
+            chordLabel.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+            chordLabel.widthAnchor.constraint(equalToConstant: 240).isActive = true
+            chordLabels.append(chordLabel)
 
-        siblingDropdown = createDropdown()
-        populateDropdown(siblingDropdown, options: singleModifierOptions, selected: editedPreferences.siblingModifier)
-        siblingDropdown.target = self
-        siblingDropdown.action = #selector(modifierChanged)
-        view.addSubview(siblingDropdown)
+            let recordButton = NSButton(title: "Record", target: self, action: #selector(toggleRecording(_:)))
+            recordButton.bezelStyle = .rounded
+            recordButton.tag = index
+            recordButton.widthAnchor.constraint(equalToConstant: 82).isActive = true
+            recordButton.setAccessibilityLabel("Record chord for \(item.title)")
+            recordButtons.append(recordButton)
 
-        // New Parent row
-        newParentLabel = NSTextField(labelWithString: "New Parent:")
-        newParentLabel.font = .systemFont(ofSize: 13)
-        newParentLabel.alignment = .right
-        newParentLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(newParentLabel)
+            let row = NSStackView(views: [actionLabel, chordLabel, recordButton])
+            row.orientation = .horizontal
+            row.alignment = .centerY
+            row.spacing = 16
+            rowStack.addArrangedSubview(row)
+        }
 
-        newParentDropdown = createDropdown()
-        populateDropdown(newParentDropdown, options: newParentModifierOptions, selected: editedPreferences.newParentModifier)
-        newParentDropdown.target = self
-        newParentDropdown.action = #selector(modifierChanged)
-        view.addSubview(newParentDropdown)
-
-        // Switch to Task row
-        switchLabel = NSTextField(labelWithString: "Switch to Task:")
-        switchLabel.font = .systemFont(ofSize: 13)
-        switchLabel.alignment = .right
-        switchLabel.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(switchLabel)
-
-        switchDropdown = createDropdown()
-        populateDropdown(switchDropdown, options: singleModifierOptions, selected: editedPreferences.switchModifier)
-        switchDropdown.target = self
-        switchDropdown.action = #selector(modifierChanged)
-        view.addSubview(switchDropdown)
-
-        // Buttons at bottom
-        saveButton = NSButton(title: "Save", target: self, action: #selector(savePreferences))
-        saveButton.bezelStyle = .rounded
-        saveButton.translatesAutoresizingMaskIntoConstraints = false
-        saveButton.isEnabled = false
-        view.addSubview(saveButton)
-
-        cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelChanges))
-        cancelButton.bezelStyle = .rounded
-        cancelButton.translatesAutoresizingMaskIntoConstraints = false
-        view.addSubview(cancelButton)
-
-        restoreDefaultsButton = NSButton(title: "Restore Defaults", target: self, action: #selector(restoreDefaults))
+        let restoreDefaultsButton = NSButton(
+            title: "Restore Defaults",
+            target: self,
+            action: #selector(restoreDefaults)
+        )
         restoreDefaultsButton.bezelStyle = .rounded
         restoreDefaultsButton.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(restoreDefaultsButton)
 
-        // Layout constraints
+        saveButton = NSButton(title: "Save", target: self, action: #selector(savePreferences))
+        saveButton.bezelStyle = .rounded
+        saveButton.isEnabled = false
+        saveButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(saveButton)
+
+        let cancelButton = NSButton(title: "Cancel", target: self, action: #selector(cancelChanges))
+        cancelButton.bezelStyle = .rounded
+        cancelButton.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(cancelButton)
+
         NSLayoutConstraint.activate([
-            // Instruction label
-            instructionLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 20),
-            instructionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
-            instructionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+            instructionLabel.topAnchor.constraint(equalTo: view.topAnchor, constant: 22),
+            instructionLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 32),
+            instructionLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -32),
 
-            // Create Child row
-            childLabel.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 40),
-            childLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 40),
-            childLabel.widthAnchor.constraint(equalToConstant: 150),
+            rowStack.topAnchor.constraint(equalTo: instructionLabel.bottomAnchor, constant: 32),
+            rowStack.centerXAnchor.constraint(equalTo: view.centerXAnchor),
 
-            childDropdown.centerYAnchor.constraint(equalTo: childLabel.centerYAnchor),
-            childDropdown.leadingAnchor.constraint(equalTo: childLabel.trailingAnchor, constant: 20),
-            childDropdown.widthAnchor.constraint(equalToConstant: 150),
-
-            // Create Sibling row
-            siblingLabel.topAnchor.constraint(equalTo: childLabel.bottomAnchor, constant: 20),
-            siblingLabel.leadingAnchor.constraint(equalTo: childLabel.leadingAnchor),
-            siblingLabel.widthAnchor.constraint(equalToConstant: 150),
-
-            siblingDropdown.centerYAnchor.constraint(equalTo: siblingLabel.centerYAnchor),
-            siblingDropdown.leadingAnchor.constraint(equalTo: siblingLabel.trailingAnchor, constant: 20),
-            siblingDropdown.widthAnchor.constraint(equalToConstant: 150),
-
-            // New Parent row
-            newParentLabel.topAnchor.constraint(equalTo: siblingLabel.bottomAnchor, constant: 20),
-            newParentLabel.leadingAnchor.constraint(equalTo: childLabel.leadingAnchor),
-            newParentLabel.widthAnchor.constraint(equalToConstant: 150),
-
-            newParentDropdown.centerYAnchor.constraint(equalTo: newParentLabel.centerYAnchor),
-            newParentDropdown.leadingAnchor.constraint(equalTo: newParentLabel.trailingAnchor, constant: 20),
-            newParentDropdown.widthAnchor.constraint(equalToConstant: 180),
-
-            // Switch to Task row
-            switchLabel.topAnchor.constraint(equalTo: newParentLabel.bottomAnchor, constant: 20),
-            switchLabel.leadingAnchor.constraint(equalTo: childLabel.leadingAnchor),
-            switchLabel.widthAnchor.constraint(equalToConstant: 150),
-
-            switchDropdown.centerYAnchor.constraint(equalTo: switchLabel.centerYAnchor),
-            switchDropdown.leadingAnchor.constraint(equalTo: switchLabel.trailingAnchor, constant: 20),
-            switchDropdown.widthAnchor.constraint(equalToConstant: 150),
-
-            // Buttons at bottom
             restoreDefaultsButton.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
             restoreDefaultsButton.bottomAnchor.constraint(equalTo: view.bottomAnchor, constant: -20),
 
@@ -190,151 +141,200 @@ class EntryModifierViewController: NSViewController {
         ])
     }
 
-    private func createDropdown() -> NSPopUpButton {
-        let dropdown = NSPopUpButton(frame: .zero, pullsDown: false)
-        dropdown.translatesAutoresizingMaskIntoConstraints = false
-        return dropdown
+    // MARK: - Recording
+
+    @objc private func toggleRecording(_ sender: NSButton) {
+        if recordingIndex == sender.tag {
+            stopRecording()
+            refreshChordRows()
+            return
+        }
+
+        stopRecording()
+        recordingIndex = sender.tag
+        recordingModifiers = []
+        recordingHeldKeyCodes = []
+        setInstructions(defaultInstructions, color: .secondaryLabelColor)
+
+        recordingMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .keyUp, .flagsChanged]
+        ) { [weak self] event in
+            guard let self else { return event }
+            guard event.window === self.view.window else { return event }
+            return self.handleRecordingEvent(event) ? nil : event
+        }
+
+        refreshChordRows()
     }
 
-    private func populateDropdown(
-        _ dropdown: NSPopUpButton,
-        options: [(String, EntryModifierPreferences.ModifierFlags)],
-        selected: EntryModifierPreferences.ModifierFlags
-    ) {
-        dropdown.removeAllItems()
+    private func handleRecordingEvent(_ event: NSEvent) -> Bool {
+        guard let recordingIndex else { return false }
+        recordingModifiers = event.modifierFlags.intersection(EntryChord.supportedModifierMask)
 
-        for (name, modifier) in options {
-            dropdown.addItem(withTitle: name)
+        switch event.type {
+        case .flagsChanged:
+            refreshChordRows()
+            return true
 
-            if modifier == selected {
-                dropdown.selectItem(withTitle: name)
+        case .keyUp:
+            guard EntryChordKey.isAllowed(event.keyCode) else { return false }
+            recordingHeldKeyCodes.remove(event.keyCode)
+            refreshChordRows()
+            return true
+
+        case .keyDown:
+            if event.keyCode == UInt16(kVK_Escape) {
+                stopRecording()
+                setInstructions(defaultInstructions, color: .secondaryLabelColor)
+                refreshChordRows()
+                return true
+            }
+
+            if EntryChordKey.isSubmissionKey(event.keyCode) {
+                guard !event.isARepeat else { return true }
+                let chord = EntryChord(
+                    modifiers: recordingModifiers,
+                    heldKeyCodes: recordingHeldKeyCodes
+                )
+                guard !chord.isEmpty else {
+                    NSSound.beep()
+                    setInstructions(
+                        "Plain Enter is reserved for creating an independent task.",
+                        color: .systemRed
+                    )
+                    return true
+                }
+
+                editedPreferences[keyPath: items[recordingIndex].keyPath] = chord
+                hasUnsavedChanges = true
+                saveButton.isEnabled = true
+                stopRecording()
+                setInstructions(defaultInstructions, color: .secondaryLabelColor)
+                refreshChordRows()
+                return true
+            }
+
+            guard EntryChordKey.isAllowed(event.keyCode) else {
+                NSSound.beep()
+                setInstructions(
+                    "That key can type into Spotlight. Choose modifiers or a non-text key.",
+                    color: .systemRed
+                )
+                return true
+            }
+
+            recordingHeldKeyCodes.insert(event.keyCode)
+            refreshChordRows()
+            return true
+
+        default:
+            return false
+        }
+    }
+
+    private func stopRecording() {
+        if let recordingMonitor {
+            NSEvent.removeMonitor(recordingMonitor)
+        }
+        recordingMonitor = nil
+        recordingIndex = nil
+        recordingModifiers = []
+        recordingHeldKeyCodes = []
+    }
+
+    private func refreshChordRows() {
+        guard chordLabels.count == items.count else { return }
+
+        for index in items.indices {
+            if recordingIndex == index {
+                let pendingChord = EntryChord(
+                    modifiers: recordingModifiers,
+                    heldKeyCodes: recordingHeldKeyCodes
+                )
+                chordLabels[index].stringValue = pendingChord.isEmpty
+                    ? "Hold chord, then Enter"
+                    : pendingChord.displayNameWithEnter
+                chordLabels[index].textColor = .labelColor
+                recordButtons[index].title = "Cancel"
+            } else {
+                chordLabels[index].stringValue = editedPreferences[
+                    keyPath: items[index].keyPath
+                ].displayNameWithEnter
+                chordLabels[index].textColor = .labelColor
+                recordButtons[index].title = "Record"
             }
         }
+    }
+
+    private func setInstructions(_ text: String, color: NSColor) {
+        instructionLabel.stringValue = text
+        instructionLabel.textColor = color
     }
 
     // MARK: - Actions
 
-    @objc private func modifierChanged() {
-        // Update edited preferences based on dropdown selections (no validation yet)
-        let childIndex = childDropdown.indexOfSelectedItem
-        if childIndex >= 0, childIndex < singleModifierOptions.count {
-            editedPreferences.childModifier = singleModifierOptions[childIndex].1
-        }
-
-        let siblingIndex = siblingDropdown.indexOfSelectedItem
-        if siblingIndex >= 0, siblingIndex < singleModifierOptions.count {
-            editedPreferences.siblingModifier = singleModifierOptions[siblingIndex].1
-        }
-
-        let newParentIndex = newParentDropdown.indexOfSelectedItem
-        if newParentIndex >= 0, newParentIndex < newParentModifierOptions.count {
-            editedPreferences.newParentModifier = newParentModifierOptions[newParentIndex].1
-        }
-
-        let switchIndex = switchDropdown.indexOfSelectedItem
-        if switchIndex >= 0, switchIndex < singleModifierOptions.count {
-            editedPreferences.switchModifier = singleModifierOptions[switchIndex].1
-        }
-
-        // Mark as changed and enable save button (validation happens on save)
-        hasUnsavedChanges = true
-        saveButton.isEnabled = true
-    }
-
-    private func validateCurrentSelection() throws {
-        // Check for duplicates
-        let modifiers = [
-            editedPreferences.childModifier,
-            editedPreferences.siblingModifier,
-            editedPreferences.switchModifier
-        ]
-
-        for i in 0..<modifiers.count {
-            for j in (i+1)..<modifiers.count {
-                if modifiers[i] == modifiers[j] {
-                    throw EntryModifierPreferencesManager.ValidationError.duplicateModifier(action: "multiple actions")
-                }
-            }
-        }
-
-        let siblingAndSwitch = editedPreferences.siblingModifier.union(editedPreferences.switchModifier)
-        if editedPreferences.newParentModifier == siblingAndSwitch {
-            throw EntryModifierPreferencesManager.ValidationError.conflictingCombination(
-                action: "Sibling + Switch"
-            )
-        }
-    }
-
     @objc private func savePreferences() {
-        // Validate before saving
-        do {
-            try validateCurrentSelection()
-        } catch let error as EntryModifierPreferencesManager.ValidationError {
-            showAlert(title: "Invalid Configuration", message: error.localizedDescription)
-            return
-        } catch {
-            showAlert(title: "Error", message: error.localizedDescription)
-            return
-        }
+        stopRecording()
 
-        // Save if validation passes
         do {
             try EntryModifierPreferencesManager.shared.saveModifiers(editedPreferences)
             hasUnsavedChanges = false
             saveButton.isEnabled = false
-
-            showAlert(title: "Preferences Saved", message: "Entry modifiers have been updated successfully.")
-
+            refreshChordRows()
+            showAlert(title: "Preferences Saved", message: "Entry chords have been updated.")
         } catch {
-            showAlert(title: "Error", message: "Failed to save preferences: \(error.localizedDescription)")
+            showAlert(title: "Invalid Configuration", message: error.localizedDescription)
         }
     }
 
     @objc private func cancelChanges() {
+        stopRecording()
+
         if hasUnsavedChanges {
             let alert = NSAlert()
             alert.messageText = "Discard Changes?"
-            alert.informativeText = "You have unsaved changes. Are you sure you want to discard them?"
+            alert.informativeText = "You have unsaved Entry Chord changes."
             alert.addButton(withTitle: "Discard")
-            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Keep Editing")
             alert.alertStyle = .warning
 
-            let response = alert.runModal()
-            if response == .alertFirstButtonReturn {
-                reloadFromPreferences()
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                refreshChordRows()
+                return
             }
-        } else {
-            view.window?.close()
+
+            editedPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
+            hasUnsavedChanges = false
+            saveButton.isEnabled = false
+            setInstructions(defaultInstructions, color: .secondaryLabelColor)
+            refreshChordRows()
         }
+
+        view.window?.close()
     }
 
     @objc private func restoreDefaults() {
+        stopRecording()
+
+        let defaults = EntryModifierPreferences.defaults()
         let alert = NSAlert()
-        alert.messageText = "Restore Default Modifiers?"
-        alert.informativeText = "This will reset entry modifiers to:\n• Child: Shift\n• Sibling: Cmd\n• New Parent: Cmd + Shift\n• Switch: Ctrl"
+        alert.messageText = "Restore Default Entry Chords?"
+        alert.informativeText = "This resets the chords to:\n• Child: \(defaults.childChord.displayNameWithEnter)\n• Sibling: \(defaults.siblingChord.displayNameWithEnter)\n• New Parent: \(defaults.newParentChord.displayNameWithEnter)\n• Switch: \(defaults.switchChord.displayNameWithEnter)"
         alert.addButton(withTitle: "Restore")
         alert.addButton(withTitle: "Cancel")
         alert.alertStyle = .warning
 
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            EntryModifierPreferencesManager.shared.resetToDefaults()
-            reloadFromPreferences()
-
-            showAlert(title: "Defaults Restored", message: "Entry modifiers have been reset to default values.")
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            refreshChordRows()
+            return
         }
-    }
 
-    private func reloadFromPreferences() {
-        editedPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
-
-        populateDropdown(childDropdown, options: singleModifierOptions, selected: editedPreferences.childModifier)
-        populateDropdown(siblingDropdown, options: singleModifierOptions, selected: editedPreferences.siblingModifier)
-        populateDropdown(newParentDropdown, options: newParentModifierOptions, selected: editedPreferences.newParentModifier)
-        populateDropdown(switchDropdown, options: singleModifierOptions, selected: editedPreferences.switchModifier)
-
+        EntryModifierPreferencesManager.shared.resetToDefaults()
+        editedPreferences = defaults
         hasUnsavedChanges = false
         saveButton.isEnabled = false
+        setInstructions(defaultInstructions, color: .secondaryLabelColor)
+        refreshChordRows()
     }
 
     private func showAlert(title: String, message: String) {

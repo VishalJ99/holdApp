@@ -33,6 +33,19 @@ class SpotlightPanel: NSPanel {
         return false
     }
 
+    override func sendEvent(_ event: NSEvent) {
+        if let viewController = contentViewController as? SpotlightViewController,
+           viewController.handleEntryChordEvent(event) {
+            return
+        }
+        super.sendEvent(event)
+    }
+
+    override func resignKey() {
+        (contentViewController as? SpotlightViewController)?.resetHeldEntryChordKeys()
+        super.resignKey()
+    }
+
     override func cancelOperation(_ sender: Any?) {
         // NSPanel intercepts Escape key and calls this instead of keyDown
         print("🔍 [SpotlightPanel] cancelOperation called - Escape intercepted!")
@@ -61,11 +74,13 @@ class SpotlightPanel: NSPanel {
 
         // Focus the text field if there is one
         if let viewController = self.contentViewController as? SpotlightViewController {
+            viewController.resetHeldEntryChordKeys()
             viewController.focusTextField()
         }
     }
 
     func hide() {
+        (contentViewController as? SpotlightViewController)?.resetHeldEntryChordKeys()
         self.orderOut(nil)
     }
 

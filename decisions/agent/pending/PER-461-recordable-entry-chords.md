@@ -1,0 +1,34 @@
+# Spotlight actions use recordable non-text Entry Chords
+
+Status: agent decision pending review
+Date: 2026-08-26
+Ticket: PER-461
+Supersedes: the fixed-picker and Option-key constraints in PER-459; preserves its dedicated exact New Parent action
+
+## Decision
+
+Each Spotlight entry action stores an exact `EntryChord`: Command, Option, Shift, and Control flags plus any held non-text physical keys, with Enter remaining the final submission key. Preferences records the chord directly instead of choosing from fixed dropdown values.
+
+Allowed held keys are Tab, Delete and Forward Delete, navigation keys, Help, arrows, and F1-F20. Printable keys and Space are rejected because they must remain available for task text. Escape remains the universal cancel key, Return/keypad Enter remain submission keys, and Caps Lock/Fn/media keys are not recordable.
+
+Configured non-text keys are reserved only while the Spotlight panel is open. The panel consumes their key-down/key-up events before AppKit editing or focus handling, tracks which configured keys are physically held, and combines that state with the current modifier flags when Enter is pressed. Chords match exactly; an unassigned combination preserves the typed task and reports that it is not assigned.
+
+## Rationale
+
+Tab and function keys are key events rather than `NSEvent.ModifierFlags`, so the previous modifier-only dropdown and text-field Return callback could not represent or reliably receive them. Intercepting configured keys at the panel boundary provides the requested Record interaction without allowing keys that would type into Spotlight.
+
+Exact matching keeps every action deterministic and makes collision validation possible. The derived Sibling + Switch chord remains the union of those two saved chords, and New Parent remains a separately configurable exact action.
+
+## Compatibility and Defaults
+
+- Existing modifier-only JSON is migrated to the new chord fields.
+- Older three-field settings continue to derive New Parent from Child plus Sibling.
+- Defaults preserve the existing behavior: Shift + Enter for Child, Command + Enter for Sibling, Control + Enter for independent task + switch, and Command + Shift + Enter for New Parent.
+- Restore Defaults removes the saved preference and immediately refreshes Spotlight.
+
+## Implementation Notes
+
+- `HoldApp/EntryModifierPreferences.swift` owns chord representation, allowed keys, migration, exact action resolution, held-key state, defaults, persistence, and conflict validation.
+- `HoldApp/EntryModifierViewController.swift` owns the four Record controls and Restore Defaults.
+- `HoldApp/SpotlightPanel.swift` intercepts Entry Chord events before AppKit text handling.
+- `HoldApp/SpotlightViewController.swift` resolves the captured chord to a task creation type.

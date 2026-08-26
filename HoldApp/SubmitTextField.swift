@@ -1,18 +1,8 @@
 import Cocoa
 
-/// Custom NSTextField that properly handles Enter key with modifier keys.
-///
-/// Standard NSTextField doesn't trigger delegate callbacks for modifier+Enter combinations
-/// because the text input system interprets them as text insertion commands.
-/// This subclass intercepts these key events at the performKeyEquivalent level.
-///
-/// Note: Uses Control instead of Option as modifier because Option+Enter is treated
-/// as text input (newline) by macOS and bypasses performKeyEquivalent entirely.
+/// Spotlight text field with a dedicated parent-selector shortcut.
+/// Entry Chords are intercepted by `SpotlightPanel` before the text system sees them.
 class SubmitTextField: NSTextField {
-
-    /// Callback triggered when Enter or modifier+Enter is pressed
-    /// Parameters: modifiers pressed (empty set for plain Enter)
-    var onSubmit: ((NSEvent.ModifierFlags) -> Void)?
 
     /// Callback triggered when Cmd+P is pressed (parent selector)
     var onParentSelector: (() -> Void)?
@@ -44,17 +34,6 @@ class SubmitTextField: NSTextField {
         if event.keyCode == 35 && event.modifierFlags.contains(.command) {  // P key
             print("🔑 [SubmitTextField] Cmd+P detected - triggering parent selector")
             onParentSelector?()
-            return true
-        }
-
-        // Check for Return/Enter key (keyCode 36)
-        if event.keyCode == 36 {
-            // Get relevant modifier flags, ignoring system flags like Caps Lock, Function, etc.
-            let relevantModifiers: NSEvent.ModifierFlags = [.control, .shift, .command]
-            let modifiers = event.modifierFlags.intersection(relevantModifiers)
-
-            // Trigger submission callback with detected modifiers
-            onSubmit?(modifiers)
             return true
         }
 

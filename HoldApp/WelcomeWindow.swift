@@ -47,7 +47,7 @@ struct WelcomeView: View {
 
     let pages: [OnboardingPage] = {
         let modifiers = EntryModifierPreferencesManager.shared.loadModifiers()
-        let siblingAndSwitch = modifiers.siblingModifier.union(modifiers.switchModifier)
+        let siblingAndSwitch = modifiers.siblingChord.union(modifiers.switchChord)
 
         return [
         // Page 1: Philosophy
@@ -77,12 +77,12 @@ struct WelcomeView: View {
                 .command(cmd: "Enter", description: "creates a new independent task (root)"),
                 .spacer,
                 .text("To maintain a relationship:"),
-                .command(cmd: "\(modifiers.childModifier.displayName)+Enter", description: "Child of current"),
-                .command(cmd: "\(modifiers.siblingModifier.displayName)+Enter", description: "Sibling of current"),
-                .command(cmd: "\(modifiers.newParentModifier.displayName)+Enter", description: "New parent of current"),
+                .command(cmd: modifiers.childChord.displayNameWithEnter, description: "Child of current"),
+                .command(cmd: modifiers.siblingChord.displayNameWithEnter, description: "Sibling of current"),
+                .command(cmd: modifiers.newParentChord.displayNameWithEnter, description: "New parent of current"),
                 .spacer,
-                .text("Add \(modifiers.switchModifier.displayName) to also switch,"),
-                .command(cmd: "\(siblingAndSwitch.displayName)+Enter", description: "Sibling + switch"),
+                .command(cmd: modifiers.switchChord.displayNameWithEnter, description: "Independent task + switch"),
+                .command(cmd: siblingAndSwitch.displayNameWithEnter, description: "Sibling + switch"),
                 .spacer,
                 .text("To choose a specific task as parent:"),
                 .command(cmd: "Cmd+P", description: "opens parent selector")
@@ -128,7 +128,7 @@ struct WelcomeView: View {
             title: "Make it yours",
             lines: [
                 .text("Open Preferences from the menu bar"),
-                .text("to customize hotkeys and modifiers.")
+                .text("to customize hotkeys and Entry Chords.")
             ]
         ),
 

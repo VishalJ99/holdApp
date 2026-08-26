@@ -36,6 +36,11 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     private var isEditMode: Bool = false
     private var editingTaskId: String?
 
+    // MARK: - Entry Chord State
+
+    private var entryChordPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
+    private var heldEntryChordKeys = EntryChordHeldKeyState()
+
     // MARK: - Parent Selection State
 
     var selectedParentId: String?
@@ -86,7 +91,8 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     }
 
     @objc private func reloadModifierPreferences() {
-        // No action needed - preferences are loaded on each submit
+        entryChordPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
+        resetHeldEntryChordKeys()
     }
 
     func show() {
@@ -195,11 +201,6 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         textField.focusRingType = .none
         textField.backgroundColor = .clear
         textField.delegate = self
-
-        // Handle Enter key submissions with modifier detection
-        textField.onSubmit = { [weak self] modifiers in
-            self?.handleSubmit(modifiers: modifiers)
-        }
 
         // Handle Cmd+P (parent selector)
         textField.onParentSelector = { [weak self] in
@@ -315,6 +316,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     }
 
     func focusTextField() {
+        resetHeldEntryChordKeys()
         // Always reset edit mode on show - guards against stale state from
         // Escape (which bypasses onCancel) or other unexpected exit paths
         resetEditMode()
@@ -388,16 +390,49 @@ class SpotlightViewController: NSViewController, TaskInputUI {
 
     // MARK: - Private Methods
 
-    private func handleSubmit(modifiers: NSEvent.ModifierFlags) {
+    /// Handles configured non-text keys and the final Enter before AppKit's text system.
+    func handleEntryChordEvent(_ event: NSEvent) -> Bool {
+        switch event.type {
+        case .keyDown:
+            if EntryChordKey.isSubmissionKey(event.keyCode) {
+                guard !event.isARepeat else { return true }
+                let chord = EntryChord(
+                    modifiers: event.modifierFlags,
+                    heldKeyCodes: heldEntryChordKeys.heldKeyCodes
+                )
+                handleSubmit(chord: chord)
+                return true
+            }
+
+            return heldEntryChordKeys.keyDown(
+                event.keyCode,
+                reservedKeyCodes: entryChordPreferences.allHeldKeyCodes
+            )
+
+        case .keyUp:
+            return heldEntryChordKeys.keyUp(
+                event.keyCode,
+                reservedKeyCodes: entryChordPreferences.allHeldKeyCodes
+            )
+
+        default:
+            return false
+        }
+    }
+
+    func resetHeldEntryChordKeys() {
+        heldEntryChordKeys.reset()
+    }
+
+    private func handleSubmit(chord: EntryChord) {
         let text = textField.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
 
-        // EDIT MODE: Plain Enter updates task, modifiers are DISABLED
+        // EDIT MODE: Plain Enter updates task; Entry Chords are disabled.
         if isEditMode {
-            if !modifiers.isEmpty {
-                // User pressed modifier keys in edit mode - show warning
-                print("⚠️ [Edit Mode] Modifiers disabled in edit mode")
-                ToastManager.shared.show("Modifiers disabled in edit mode", level: .warning)
+            if !chord.isEmpty {
+                print("⚠️ [Edit Mode] Entry Chords disabled in edit mode")
+                ToastManager.shared.show("Entry Chords disabled in edit mode", level: .warning)
                 return
             }
 
@@ -412,35 +447,26 @@ class SpotlightViewController: NSViewController, TaskInputUI {
             return
         }
 
-        // NORMAL MODE: Load modifier preferences and detect which are pressed
-        let prefs = EntryModifierPreferencesManager.shared.loadModifiers()
+        guard let action = entryChordPreferences.action(for: chord) else {
+            print("⚠️ [Spotlight] Unassigned Entry Chord: \(chord.displayNameWithEnter)")
+            ToastManager.shared.show("That Entry Chord is not assigned", level: .warning)
+            return
+        }
 
-        let isNewParentPressed = modifiers == prefs.newParentModifier.nsEventFlags
-        let isChildPressed = modifiers.contains(prefs.childModifier.nsEventFlags)
-        let isSiblingPressed = modifiers.contains(prefs.siblingModifier.nsEventFlags)
-        let isSwitchPressed = modifiers.contains(prefs.switchModifier.nsEventFlags)
-
-        // Determine task creation type using compositional logic
-        // Check combinations first, then individual modifiers
         let creationType: TaskCreationType
-        if isNewParentPressed {
-            // Configured exact combination - new task becomes parent of current
-            creationType = .swap
-        } else if isChildPressed {
-            // Child modifier - create child and auto-switch
-            creationType = .child
-        } else if isSiblingPressed && isSwitchPressed {
-            // Sibling + switch modifiers - create sibling and switch to it
-            creationType = .siblingAndSwitch
-        } else if isSiblingPressed {
-            // Sibling modifier only - create sibling without switching
-            creationType = .sibling
-        } else if isSwitchPressed {
-            // Switch modifier only - create top-level and switch to it
-            creationType = .topLevelAndSwitch
-        } else {
-            // No modifiers - create top-level without switching
+        switch action {
+        case .topLevel:
             creationType = .topLevel
+        case .topLevelAndSwitch:
+            creationType = .topLevelAndSwitch
+        case .child:
+            creationType = .child
+        case .sibling:
+            creationType = .sibling
+        case .siblingAndSwitch:
+            creationType = .siblingAndSwitch
+        case .newParent:
+            creationType = .swap
         }
 
         // Clear text field, reset height, and submit
@@ -459,8 +485,7 @@ extension SpotlightViewController: NSTextFieldDelegate {
     }
 
     func control(_ control: NSControl, textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
-        // Note: Enter key submissions (including modifier combinations) are handled
-        // by SubmitTextField.onSubmit callback, not here.
+        // Entry Chords are handled by SpotlightPanel before the field editor.
 
         // Handle Up Arrow - load current task
         if commandSelector == #selector(NSResponder.moveUp(_:)) {
