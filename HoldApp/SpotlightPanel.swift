@@ -1,6 +1,19 @@
 import Cocoa
+import ApplicationServices
+import CoreGraphics
 
 class SpotlightPanel: NSPanel {
+
+    private var entryChordEventTap: CFMachPort?
+    private var entryChordEventTapSource: CFRunLoopSource?
+
+    private static let entryChordEventTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
+        guard let userInfo else { return Unmanaged.passUnretained(event) }
+        let panel = Unmanaged<SpotlightPanel>
+            .fromOpaque(userInfo)
+            .takeUnretainedValue()
+        return panel.handleEntryChordEventTap(type: type, event: event)
+    }
 
     init() {
         super.init(
@@ -25,6 +38,10 @@ class SpotlightPanel: NSPanel {
         self.center()
     }
 
+    deinit {
+        stopEntryChordEventTap()
+    }
+
     override var canBecomeKey: Bool {
         return true
     }
@@ -42,6 +59,7 @@ class SpotlightPanel: NSPanel {
     }
 
     override func resignKey() {
+        stopEntryChordEventTap()
         (contentViewController as? SpotlightViewController)?.resetHeldEntryChordKeys()
         super.resignKey()
     }
@@ -76,12 +94,106 @@ class SpotlightPanel: NSPanel {
         if let viewController = self.contentViewController as? SpotlightViewController {
             viewController.resetHeldEntryChordKeys()
             viewController.focusTextField()
+            startEntryChordEventTapIfNeeded(for: viewController)
         }
     }
 
     func hide() {
+        stopEntryChordEventTap()
         (contentViewController as? SpotlightViewController)?.resetHeldEntryChordKeys()
         self.orderOut(nil)
+    }
+
+    private func startEntryChordEventTapIfNeeded(for viewController: SpotlightViewController) {
+        stopEntryChordEventTap()
+        guard viewController.hasReservedEntryChordKeys else { return }
+
+        guard AXIsProcessTrusted() else {
+            ToastManager.shared.show(
+                "Allow Hold in Accessibility to use system Entry Chords",
+                level: .warning
+            )
+            return
+        }
+
+        let eventTypes: [CGEventType] = [.keyDown, .keyUp]
+        let eventMask = eventTypes.reduce(CGEventMask(0)) { mask, type in
+            mask | (CGEventMask(1) << type.rawValue)
+        }
+
+        guard let eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: Self.entryChordEventTapCallback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            ToastManager.shared.show(
+                "System Entry Chord capture is unavailable",
+                level: .warning
+            )
+            return
+        }
+
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0) else {
+            CFMachPortInvalidate(eventTap)
+            return
+        }
+
+        entryChordEventTap = eventTap
+        entryChordEventTapSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: eventTap, enable: true)
+    }
+
+    private func handleEntryChordEventTap(
+        type: CGEventType,
+        event: CGEvent
+    ) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if isVisible, isKeyWindow, let entryChordEventTap {
+                CGEvent.tapEnable(tap: entryChordEventTap, enable: true)
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
+        guard isVisible,
+              isKeyWindow,
+              let viewController = contentViewController as? SpotlightViewController else {
+            return Unmanaged.passUnretained(event)
+        }
+
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+        let consumed: Bool
+        switch type {
+        case .keyDown:
+            consumed = viewController.handleHeldEntryChordKey(
+                keyCode,
+                isKeyDown: true
+            )
+        case .keyUp:
+            consumed = viewController.handleHeldEntryChordKey(
+                keyCode,
+                isKeyDown: false
+            )
+        default:
+            consumed = false
+        }
+
+        return consumed ? nil : Unmanaged.passUnretained(event)
+    }
+
+    private func stopEntryChordEventTap() {
+        if let entryChordEventTapSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), entryChordEventTapSource, .commonModes)
+        }
+        if let entryChordEventTap {
+            CGEvent.tapEnable(tap: entryChordEventTap, enable: false)
+            CFMachPortInvalidate(entryChordEventTap)
+        }
+        entryChordEventTapSource = nil
+        entryChordEventTap = nil
     }
 
     func updateHeight(_ newHeight: CGFloat, animated: Bool) {

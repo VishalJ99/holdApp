@@ -41,6 +41,10 @@ class SpotlightViewController: NSViewController, TaskInputUI {
     private var entryChordPreferences = EntryModifierPreferencesManager.shared.loadModifiers()
     private var heldEntryChordKeys = EntryChordHeldKeyState()
 
+    var hasReservedEntryChordKeys: Bool {
+        !entryChordPreferences.allHeldKeyCodes.isEmpty
+    }
+
     // MARK: - Parent Selection State
 
     var selectedParentId: String?
@@ -404,20 +408,27 @@ class SpotlightViewController: NSViewController, TaskInputUI {
                 return true
             }
 
-            return heldEntryChordKeys.keyDown(
-                event.keyCode,
-                reservedKeyCodes: entryChordPreferences.allHeldKeyCodes
-            )
+            return handleHeldEntryChordKey(event.keyCode, isKeyDown: true)
 
         case .keyUp:
-            return heldEntryChordKeys.keyUp(
-                event.keyCode,
-                reservedKeyCodes: entryChordPreferences.allHeldKeyCodes
-            )
+            return handleHeldEntryChordKey(event.keyCode, isKeyDown: false)
 
         default:
             return false
         }
+    }
+
+    func handleHeldEntryChordKey(_ keyCode: UInt16, isKeyDown: Bool) -> Bool {
+        if isKeyDown {
+            return heldEntryChordKeys.keyDown(
+                keyCode,
+                reservedKeyCodes: entryChordPreferences.allHeldKeyCodes
+            )
+        }
+        return heldEntryChordKeys.keyUp(
+            keyCode,
+            reservedKeyCodes: entryChordPreferences.allHeldKeyCodes
+        )
     }
 
     func resetHeldEntryChordKeys() {
