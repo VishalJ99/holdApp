@@ -13,6 +13,8 @@ Allowed held keys are Tab, Delete and Forward Delete, navigation keys, Help, arr
 
 Configured non-text keys are reserved only while the Spotlight panel is open. The panel consumes their key-down/key-up events before AppKit editing or focus handling, tracks which configured keys are physically held, and combines that state with the current modifier flags when Enter is pressed. Chords match exactly; an unassigned combination preserves the typed task and reports that it is not assigned.
 
+While a Preferences Record control is explicitly active, Hold installs a session-level active keyboard event tap and discards key-down, key-up, and modifier-change events after recording them. This prevents macOS-reserved combinations such as Command + Tab from opening their system UI before the recorder can see the chord. The tap is removed immediately when the chord is accepted or cancelled, the Preferences view disappears, or Hold loses application focus; normal keyboard behavior is unchanged at every other time. Starting this protected recording mode requires macOS Accessibility permission, and Hold sends the user to the relevant System Settings pane when permission is absent.
+
 ## Rationale
 
 Tab and function keys are key events rather than `NSEvent.ModifierFlags`, so the previous modifier-only dropdown and text-field Return callback could not represent or reliably receive them. Intercepting configured keys at the panel boundary provides the requested Record interaction without allowing keys that would type into Spotlight.
@@ -29,6 +31,6 @@ Exact matching keeps every action deterministic and makes collision validation p
 ## Implementation Notes
 
 - `HoldApp/EntryModifierPreferences.swift` owns chord representation, allowed keys, migration, exact action resolution, held-key state, defaults, persistence, and conflict validation.
-- `HoldApp/EntryModifierViewController.swift` owns the four Record controls and Restore Defaults.
+- `HoldApp/EntryModifierViewController.swift` owns the four Record controls, the recording-only session event tap and Accessibility-permission prompt, and Restore Defaults.
 - `HoldApp/SpotlightPanel.swift` intercepts Entry Chord events before AppKit text handling.
 - `HoldApp/SpotlightViewController.swift` resolves the captured chord to a task creation type.

@@ -1,5 +1,7 @@
 import Cocoa
 import Carbon
+import ApplicationServices
+import CoreGraphics
 
 /// Preferences for the chords used when submitting text from Spotlight.
 final class EntryModifierViewController: NSViewController {
@@ -26,7 +28,17 @@ final class EntryModifierViewController: NSViewController {
     private var recordingIndex: Int?
     private var recordingModifiers: NSEvent.ModifierFlags = []
     private var recordingHeldKeyCodes: Set<UInt16> = []
-    private var recordingMonitor: Any?
+    private var recordingEventTap: CFMachPort?
+    private var recordingEventTapSource: CFRunLoopSource?
+    private var applicationResignObserver: NSObjectProtocol?
+
+    private static let recordingEventTapCallback: CGEventTapCallBack = { _, type, event, userInfo in
+        guard let userInfo else { return Unmanaged.passUnretained(event) }
+        let controller = Unmanaged<EntryModifierViewController>
+            .fromOpaque(userInfo)
+            .takeUnretainedValue()
+        return controller.handleRecordingEventTap(type: type, event: event)
+    }
 
     private let defaultInstructions = "Click Record, hold modifiers or non-text keys, then press Enter. Letters, numbers, punctuation, and Space are not allowed."
 
@@ -41,6 +53,9 @@ final class EntryModifierViewController: NSViewController {
 
     deinit {
         stopRecording()
+        if let applicationResignObserver {
+            NotificationCenter.default.removeObserver(applicationResignObserver)
+        }
     }
 
     override func loadView() {
@@ -51,6 +66,17 @@ final class EntryModifierViewController: NSViewController {
         super.viewDidLoad()
         setupUI()
         refreshChordRows()
+
+        applicationResignObserver = NotificationCenter.default.addObserver(
+            forName: NSApplication.didResignActiveNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            guard let self, self.recordingIndex != nil else { return }
+            self.stopRecording()
+            self.setInstructions(self.defaultInstructions, color: .secondaryLabelColor)
+            self.refreshChordRows()
+        }
     }
 
     override func viewWillDisappear() {
@@ -156,42 +182,113 @@ final class EntryModifierViewController: NSViewController {
         recordingHeldKeyCodes = []
         setInstructions(defaultInstructions, color: .secondaryLabelColor)
 
-        recordingMonitor = NSEvent.addLocalMonitorForEvents(
-            matching: [.keyDown, .keyUp, .flagsChanged]
-        ) { [weak self] event in
-            guard let self else { return event }
-            guard event.window === self.view.window else { return event }
-            return self.handleRecordingEvent(event) ? nil : event
+        guard startRecordingEventTap() else {
+            stopRecording()
+            refreshChordRows()
+            return
         }
 
         refreshChordRows()
     }
 
-    private func handleRecordingEvent(_ event: NSEvent) -> Bool {
-        guard let recordingIndex else { return false }
-        recordingModifiers = event.modifierFlags.intersection(EntryChord.supportedModifierMask)
+    private func startRecordingEventTap() -> Bool {
+        let promptOptions = [
+            kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true
+        ] as CFDictionary
 
-        switch event.type {
+        guard AXIsProcessTrustedWithOptions(promptOptions) else {
+            showAccessibilityPermissionAlert()
+            return false
+        }
+
+        let eventTypes: [CGEventType] = [.keyDown, .keyUp, .flagsChanged]
+        let eventMask = eventTypes.reduce(CGEventMask(0)) { mask, type in
+            mask | (CGEventMask(1) << type.rawValue)
+        }
+
+        guard let eventTap = CGEvent.tapCreate(
+            tap: .cgSessionEventTap,
+            place: .headInsertEventTap,
+            options: .defaultTap,
+            eventsOfInterest: eventMask,
+            callback: Self.recordingEventTapCallback,
+            userInfo: Unmanaged.passUnretained(self).toOpaque()
+        ) else {
+            showAlert(
+                title: "System Shortcut Capture Unavailable",
+                message: "Hold could not start protected shortcut recording. Confirm Hold is enabled in System Settings > Privacy & Security > Accessibility, then relaunch Hold and try again."
+            )
+            return false
+        }
+
+        guard let source = CFMachPortCreateRunLoopSource(kCFAllocatorDefault, eventTap, 0) else {
+            CFMachPortInvalidate(eventTap)
+            showAlert(
+                title: "System Shortcut Capture Unavailable",
+                message: "Hold could not attach the shortcut recorder. Relaunch Hold and try again."
+            )
+            return false
+        }
+
+        recordingEventTap = eventTap
+        recordingEventTapSource = source
+        CFRunLoopAddSource(CFRunLoopGetMain(), source, .commonModes)
+        CGEvent.tapEnable(tap: eventTap, enable: true)
+        return true
+    }
+
+    private func handleRecordingEventTap(
+        type: CGEventType,
+        event: CGEvent
+    ) -> Unmanaged<CGEvent>? {
+        if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            if recordingIndex != nil, let recordingEventTap {
+                CGEvent.tapEnable(tap: recordingEventTap, enable: true)
+            }
+            return Unmanaged.passUnretained(event)
+        }
+
+        guard recordingIndex != nil else {
+            return Unmanaged.passUnretained(event)
+        }
+
+        recordingModifiers = modifierFlags(from: event.flags)
+        let keyCode = UInt16(event.getIntegerValueField(.keyboardEventKeycode))
+        let isRepeat = event.getIntegerValueField(.keyboardEventAutorepeat) != 0
+        handleRecordingEvent(type: type, keyCode: keyCode, isRepeat: isRepeat)
+
+        // Recording is an explicit, temporary modal state. Swallow every
+        // keyboard event in that state so system shortcuts such as Cmd-Tab
+        // cannot act before the chord has been accepted or cancelled.
+        return nil
+    }
+
+    private func handleRecordingEvent(
+        type: CGEventType,
+        keyCode: UInt16,
+        isRepeat: Bool
+    ) {
+        guard let recordingIndex else { return }
+
+        switch type {
         case .flagsChanged:
             refreshChordRows()
-            return true
 
         case .keyUp:
-            guard EntryChordKey.isAllowed(event.keyCode) else { return false }
-            recordingHeldKeyCodes.remove(event.keyCode)
+            guard EntryChordKey.isAllowed(keyCode) else { return }
+            recordingHeldKeyCodes.remove(keyCode)
             refreshChordRows()
-            return true
 
         case .keyDown:
-            if event.keyCode == UInt16(kVK_Escape) {
+            if keyCode == UInt16(kVK_Escape) {
                 stopRecording()
                 setInstructions(defaultInstructions, color: .secondaryLabelColor)
                 refreshChordRows()
-                return true
+                return
             }
 
-            if EntryChordKey.isSubmissionKey(event.keyCode) {
-                guard !event.isARepeat else { return true }
+            if EntryChordKey.isSubmissionKey(keyCode) {
+                guard !isRepeat else { return }
                 let chord = EntryChord(
                     modifiers: recordingModifiers,
                     heldKeyCodes: recordingHeldKeyCodes
@@ -202,7 +299,7 @@ final class EntryModifierViewController: NSViewController {
                         "Plain Enter is reserved for creating an independent task.",
                         color: .systemRed
                     )
-                    return true
+                    return
                 }
 
                 editedPreferences[keyPath: items[recordingIndex].keyPath] = chord
@@ -211,35 +308,63 @@ final class EntryModifierViewController: NSViewController {
                 stopRecording()
                 setInstructions(defaultInstructions, color: .secondaryLabelColor)
                 refreshChordRows()
-                return true
+                return
             }
 
-            guard EntryChordKey.isAllowed(event.keyCode) else {
+            guard EntryChordKey.isAllowed(keyCode) else {
                 NSSound.beep()
                 setInstructions(
                     "That key can type into Spotlight. Choose modifiers or a non-text key.",
                     color: .systemRed
                 )
-                return true
+                return
             }
 
-            recordingHeldKeyCodes.insert(event.keyCode)
+            recordingHeldKeyCodes.insert(keyCode)
             refreshChordRows()
-            return true
 
         default:
-            return false
+            return
         }
     }
 
+    private func modifierFlags(from flags: CGEventFlags) -> NSEvent.ModifierFlags {
+        var modifiers: NSEvent.ModifierFlags = []
+        if flags.contains(.maskCommand) { modifiers.insert(.command) }
+        if flags.contains(.maskAlternate) { modifiers.insert(.option) }
+        if flags.contains(.maskShift) { modifiers.insert(.shift) }
+        if flags.contains(.maskControl) { modifiers.insert(.control) }
+        return modifiers
+    }
+
     private func stopRecording() {
-        if let recordingMonitor {
-            NSEvent.removeMonitor(recordingMonitor)
+        if let recordingEventTapSource {
+            CFRunLoopRemoveSource(CFRunLoopGetMain(), recordingEventTapSource, .commonModes)
         }
-        recordingMonitor = nil
+        if let recordingEventTap {
+            CGEvent.tapEnable(tap: recordingEventTap, enable: false)
+            CFMachPortInvalidate(recordingEventTap)
+        }
+        recordingEventTapSource = nil
+        recordingEventTap = nil
         recordingIndex = nil
         recordingModifiers = []
         recordingHeldKeyCodes = []
+    }
+
+    private func showAccessibilityPermissionAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Allow Hold to Record System Shortcuts"
+        alert.informativeText = "To record combinations such as Command + Tab without opening the app switcher, enable Hold in System Settings > Privacy & Security > Accessibility, then click Record again."
+        alert.addButton(withTitle: "Open Accessibility Settings")
+        alert.addButton(withTitle: "Not Now")
+        alert.alertStyle = .informational
+
+        guard alert.runModal() == .alertFirstButtonReturn,
+              let settingsURL = URL(
+                string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+              ) else { return }
+        NSWorkspace.shared.open(settingsURL)
     }
 
     private func refreshChordRows() {
