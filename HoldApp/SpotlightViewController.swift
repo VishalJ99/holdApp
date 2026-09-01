@@ -294,9 +294,10 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         // Calculate pencil Y to align with text top
         let pencilY = newHeight - topPadding - 24
 
-        // INSTANT: Update container and reposition text/pencil (only Y changes, height stays fixed)
-        // Since textField height doesn't change, NSTextField won't reflow - text stays stable
+        // INSTANT: Update container and reposition text/pencil.
+        // Refresh the fixed height in case Spotlight moved to a differently sized display.
         view.frame.size.height = newContainerHeight
+        textField.frame.size.height = fixedTextFieldHeight
         textField.frame.origin.y = textFieldY
         textField.frame.origin.x = textFieldX
         pencilIconView.frame.origin.y = pencilY
@@ -346,6 +347,7 @@ class SpotlightViewController: NSViewController, TaskInputUI {
         let fixedTextFieldHeight = maxPillHeight - pillVerticalPadding
         let textFieldY = minPillHeight - topPadding - fixedTextFieldHeight
         let textFieldX: CGFloat = pencilIconView.isHidden ? 20 : 54
+        textField.frame.size.height = fixedTextFieldHeight
         textField.frame.origin.y = textFieldY
         textField.frame.origin.x = textFieldX
 
