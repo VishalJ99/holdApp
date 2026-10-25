@@ -68,3 +68,5 @@ Last updated: October 25, 2026
 ## PER-600 verification
 
 `scripts/test-entry-chord-routing.sh` compiles the real SpotlightPanel against a stub controller and exercises Control-Return/keypad Enter key equivalents plus capture setup after key loss/regain, without creating tasks or using CloudKit. It checks AppKit routing and lifecycle, not physical system-wide key delivery or Accessibility authorization. Temporary compiler outputs remain under `/private/tmp/hold-entry-chords.*`.
+
+- `app-store-assets/app-store-connect/submission-1.7-macos.md` records PER-600 macOS archive, TestFlight and MacBook deployment evidence.

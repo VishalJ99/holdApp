@@ -20,3 +20,5 @@
 - `scripts/app_store_release_submit.rb` - Local Ruby App Store Connect release helper that inspects uploaded build attachment state, waits for valid builds, sets export compliance, attaches builds to `appStoreVersion` records, and submits through the current `reviewSubmissions`/`reviewSubmissionItems` API flow.
 - `scripts/set_app_release_version.rb` - Local Ruby helper for dry-running and applying iOS/macOS app target `MARKETING_VERSION` updates in `HoldApp.xcodeproj/project.pbxproj` while leaving test targets untouched.
 - `scripts/verify_app_store_assets.rb` - Local Ruby validator for App Store screenshot dimensions/alpha, marketing icon dimensions/alpha, menu-bar template alpha, and referenced app icon asset-catalog slots.
+
+- `app-store-assets/app-store-connect/submission-1.7-macos.md` - PER-600 macOS 1.7 (16) TestFlight archive/upload and MacBook deployment evidence.

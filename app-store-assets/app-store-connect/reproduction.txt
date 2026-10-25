@@ -59,3 +59,5 @@ PER-600 macOS 1.7 (16) keyboard routing, source base f84e8dd:
   HOLD_PANEL_SOURCE=/private/tmp/Hold-PER-600/SpotlightPanel-before.swift bash scripts/test-entry-chord-routing.sh
   Expected: prior source fails six checks; patched source passes six checks.
   Regression uses the real panel with a stub controller, never persisted tasks or CloudKit.
+
+PER-600 archive/upload and deployment: follow submission-1.7-macos.md, source 23b2fcf87511c9e40eb7e3d1aaea41ada0724c8e, MacBook Xcode 26.6 (17F113).
