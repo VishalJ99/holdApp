@@ -58,6 +58,14 @@ class SpotlightPanel: NSPanel {
         super.sendEvent(event)
     }
 
+    override func becomeKey() {
+        super.becomeKey()
+        if let viewController = contentViewController as? SpotlightViewController {
+            viewController.resetHeldEntryChordKeys()
+            startEntryChordEventTapIfNeeded(for: viewController)
+        }
+    }
+
     override func resignKey() {
         stopEntryChordEventTap()
         (contentViewController as? SpotlightViewController)?.resetHeldEntryChordKeys()
@@ -76,6 +84,12 @@ class SpotlightPanel: NSPanel {
     }
 
     override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        // AppKit may resolve Control-Return as a context-menu equivalent before
+        // sendEvent reaches the field editor. Resolve entry chords here too.
+        if let viewController = contentViewController as? SpotlightViewController,
+           viewController.handleEntryChordEvent(event) {
+            return true
+        }
         print("🔍 [SpotlightPanel] performKeyEquivalent - keyCode: \(event.keyCode)")
         if event.keyCode == 53 {
             print("🔍 [SpotlightPanel] Escape caught in performKeyEquivalent!")
@@ -94,7 +108,6 @@ class SpotlightPanel: NSPanel {
         if let viewController = self.contentViewController as? SpotlightViewController {
             viewController.resetHeldEntryChordKeys()
             viewController.focusTextField()
-            startEntryChordEventTapIfNeeded(for: viewController)
         }
     }
 

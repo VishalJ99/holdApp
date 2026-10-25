@@ -51,3 +51,11 @@ Notes:
 - User confirmed `1.1` as the target version string before the local project version was updated.
 - The retained `preflight-1.1.json` has no local marketing-version mismatch warnings after the `1.1` project update.
 - App Store Connect initially copied old screenshots into the new editable `1.1` records. The second applied command deleted those inherited editable-version screenshot records and uploaded the branded files; live verification showed iPhone `94804` bytes, iPad `105090` bytes, and Mac `94189` bytes, all `COMPLETE`.
+
+PER-600 macOS 1.7 (16) keyboard routing, source base f84e8dd:
+  Run on MacBook: bash scripts/test-entry-chord-routing.sh
+  Before comparison: mkdir -p /private/tmp/Hold-PER-600
+  git show f84e8dd:HoldApp/SpotlightPanel.swift > /private/tmp/Hold-PER-600/SpotlightPanel-before.swift
+  HOLD_PANEL_SOURCE=/private/tmp/Hold-PER-600/SpotlightPanel-before.swift bash scripts/test-entry-chord-routing.sh
+  Expected: prior source fails six checks; patched source passes six checks.
+  Regression uses the real panel with a stub controller, never persisted tasks or CloudKit.
